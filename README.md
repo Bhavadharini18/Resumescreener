@@ -1,31 +1,112 @@
-<<<<<<< HEAD
-Resume Shortlister (MERN)
+Resume Screening and Skill Matching System
 
-Structure:
-- backend/ — Express + Mongoose API
-- frontend/ — React (Vite) UI
+An AI-powered application that automatically screens resumes and ranks candidates based on how well they match a given job description using Natural Language Processing (NLP) and semantic similarity.
 
-Quick run (requires Node.js and MongoDB):
+Problem Statement
 
-1) Backend
+Recruiters often receive hundreds of resumes for a single job role. Manual screening is time-consuming, inconsistent, and prone to bias. Traditional keyword-based filtering systems fail to accurately capture the relevance of a candidate’s skills and experience.
 
-```powershell
-cd "C:/Users/bhava/OneDrive/Documents/resume shortlister/backend"
+Solution
+
+This project uses NLP-based semantic analysis to intelligently match resumes with job descriptions. Instead of relying on exact keyword matching, the system understands the meaning of text, evaluates skill relevance, and produces ranked, explainable candidate results to support fair and efficient hiring decisions.
+
+Key Features
+
+Upload multiple resumes in PDF or DOCX format
+
+Input job description text
+
+Semantic resume and job matching using embeddings
+
+Skill extraction and skill gap analysis
+
+Candidate ranking with match scores
+
+Explainable results for each candidate
+
+MongoDB-based data storage
+
+Simple and clean frontend interface
+
+Tech Stack
+
+Frontend
+
+React.js or Streamlit
+
+HTML, CSS, Bootstrap
+
+Backend
+
+FastAPI (Python)
+
+REST APIs
+
+AI and NLP
+
+Sentence Transformers (all-MiniLM-L6-v2)
+
+SpaCy
+
+Scikit-learn (cosine similarity)
+
+Database
+
+MongoDB (MongoDB Compass)
+
+System Architecture
+
+Frontend (React or Streamlit)
+→ FastAPI Backend
+→ NLP Processing and Scoring Engine
+→ MongoDB Database
+→ Ranked Candidate Results
+
+Matching Logic
+
+The final match score is calculated using a weighted approach:
+
+Final Score =
+0.7 × Semantic Similarity + 0.3 × Skill Match Score
+
+Candidates are ranked based on this score.
+
+How It Works
+
+User uploads resumes and enters a job description
+
+Resume text is extracted and preprocessed
+
+Semantic embeddings are generated for resumes and job description
+
+Cosine similarity is computed
+
+Skills are extracted and compared
+
+Candidates are ranked and displayed with explanations
+
+How to Run the Project
+
+Backend setup:
+
+pip install fastapi uvicorn pymongo sentence-transformers spacy scikit-learn
+uvicorn main:app --reload
+
+Frontend setup:
+
 npm install
-# copy .env.example to .env and set MONGODB_URI
-npm run dev
-```
+npm start
 
-2) Frontend
+Or using Streamlit:
 
-```powershell
-cd "C:/Users/bhava/OneDrive/Documents/resume shortlister/frontend"
-npm install
-npm run dev
-```
+streamlit run app.py
 
-The frontend expects the backend at `http://localhost:5000`.
-=======
-# Resumescreener
-Resume Screening &amp; Skill Matching System is an AI-powered application that uses NLP and semantic similarity to match resumes with job descriptions. It ranks candidates based on skill relevance and experience, providing explainable scores to help recruiters make faster and fair hiring decisions.
->>>>>>> f105522bb3aa40c44892a01eb4b7c0f8cddf5ba3
+Use Cases
+
+Automated resume screening
+
+Skill-based candidate shortlisting
+
+Fair and explainable hiring systems
+
+Recruitment analytics and decision support
