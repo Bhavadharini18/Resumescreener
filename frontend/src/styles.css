@@ -500,54 +500,65 @@ button, input[type="submit"], input[type="button"] {
 
 /* Hero Visualization */
 .hero-visual {
-	position: relative;
-	height: 400px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 2rem;
 	animation: fadeInLeft 0.8s ease-out;
+	flex-wrap: wrap;
+	padding: 2rem 0;
 }
 
 .floating-card {
-	position: absolute;
+	position: relative;
 	background: white;
 	border-radius: 12px;
-	padding: 1.5rem;
-	box-shadow: var(--shadow-lg);
+	padding: 2rem 1.5rem;
+	box-shadow: 0 4px 20px rgba(30, 111, 224, 0.1);
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 0.75rem;
+	justify-content: center;
+	gap: 1rem;
 	animation: float 4s ease-in-out infinite;
 	font-weight: 600;
+	min-width: 140px;
+	transition: var(--transition);
+	border: 2px solid transparent;
+}
+
+.floating-card:hover {
+	box-shadow: 0 8px 30px rgba(30, 111, 224, 0.2);
+	border-color: var(--blue-300);
+	transform: translateY(-5px);
 }
 
 .card-1 {
-	top: 20px;
-	left: 0;
-	width: 120px;
+	background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
 	animation-delay: 0s;
 }
 
 .card-2 {
-	top: 150px;
-	left: 80px;
-	width: 120px;
+	background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
 	animation-delay: 0.5s;
 }
 
 .card-3 {
-	top: 280px;
-	right: 0;
-	width: 120px;
+	background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
 	animation-delay: 1s;
 }
 
 .card-icon {
-	font-size: 2rem;
+	font-size: 2.5rem;
+	line-height: 1;
 }
 
 .card-text {
-	font-size: 0.9rem;
+	font-size: 1rem;
 	text-align: center;
 	color: var(--accent);
+	font-weight: 700;
+	letter-spacing: 0.3px;
 }
 
 /* ========== Features Section ========== */
@@ -1470,7 +1481,21 @@ input::placeholder {
 	}
 
 	.hero-visual {
-		height: 300px;
+		gap: 1rem;
+		padding: 1.5rem 0;
+	}
+
+	.floating-card {
+		min-width: 120px;
+		padding: 1.5rem 1rem;
+	}
+
+	.card-icon {
+		font-size: 2rem;
+	}
+
+	.card-text {
+		font-size: 0.9rem;
 	}
 
 	.floating-card {
