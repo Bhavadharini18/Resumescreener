@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Resume Shortlister</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f2f4f8;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 850px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        textarea, input[type="submit"] {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        h2 {
+            color: #333;
+        }
+        .result {
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+            margin-top: 20px;
+        }
+        .resume-card {
+            background: #f9f9f9;
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .score {
+            font-weight: bold;
+            color: #2a7b2e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Resume Shortlister</h2>
+        <form method="POST">
+            <label>Job Description:</label><br>
+            <textarea name="job_description" rows="4" placeholder="Enter job description here...">{{ job_description or '' }}</textarea><br>
+            <label>Resumes (Enter each resume in a new line):</label><br>
+            <textarea name="resumes" rows="8" placeholder="Paste resumes, one per line."></textarea><br>
+            <input type="submit" value="Shortlist Resumes">
+        </form>
+
+        {% if results %}
+        <div class="result">
+            <h3>Ranked Resumes for: "{{ job_description[:50] }}..."</h3>
+            {% for res in results %}
+            <div class="resume-card">
+                <p><span class="score">Score:</span> {{ res.score }} | Match: {{ res.match }}</p>
+                <p><strong>Common Words:</strong> {{ res.common_words }}</p>
+                <p><strong>Resume:</strong> {{ res.resume }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
