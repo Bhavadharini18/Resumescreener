@@ -1022,29 +1022,60 @@ async def apply_job(request: ApplyJobRequest):
             improvements.append(f"Highlight your experience with: {', '.join(matched_skills[:3])}")
         improvements.append("Use keywords from the job description in your resume")
         
-        # Store application in database
+        # Store application in database with duplicate prevention
         try:
             client = get_mongodb_client()
             if client:
                 db = client['resume-shortlister']
                 applications_collection = db['applications']
                 
-                application = {
-                    'jobId': request.jobId,
-                    'jobTitle': request.jobTitle,
-                    'candidateId': request.candidateId,
-                    'candidateName': request.candidateName,
-                    'candidateEmail': request.candidateEmail,
-                    'matchPercentage': match_percentage,
-                    'matchedSkills': matched_skills,
-                    'missingSkills': missing_skills,
-                    'semanticScore': float(semantic_score),
-                    'skillScore': float(skill_score),
-                    'appliedAt': datetime.utcnow()
-                }
+                # Check for duplicate application (same candidate email + job ID)
+                import hashlib
+                duplicate_key = hashlib.md5(
+                    f"{request.candidateEmail.lower()}_{request.jobId}".encode()
+                ).hexdigest()
                 
-                result = applications_collection.insert_one(application)
-                logger.info(f"Application stored with ID: {result.inserted_id}")
+                existing_application = applications_collection.find_one({
+                    'duplicateKey': duplicate_key
+                })
+                
+                if existing_application:
+                    # Update existing application instead of creating duplicate
+                    applications_collection.update_one(
+                        {'duplicateKey': duplicate_key},
+                        {
+                            '$set': {
+                                'matchPercentage': match_percentage,
+                                'matchedSkills': matched_skills,
+                                'missingSkills': missing_skills,
+                                'semanticScore': float(semantic_score),
+                                'skillScore': float(skill_score),
+                                'appliedAt': datetime.utcnow(),
+                                'updatedAt': datetime.utcnow()
+                            }
+                        }
+                    )
+                    logger.info(f"Updated existing application for {request.candidateEmail} - Job: {request.jobId}")
+                else:
+                    # Create new application
+                    application = {
+                        'jobId': request.jobId,
+                        'jobTitle': request.jobTitle,
+                        'candidateId': request.candidateId,
+                        'candidateName': request.candidateName,
+                        'candidateEmail': request.candidateEmail,
+                        'matchPercentage': match_percentage,
+                        'matchedSkills': matched_skills,
+                        'missingSkills': missing_skills,
+                        'semanticScore': float(semantic_score),
+                        'skillScore': float(skill_score),
+                        'duplicateKey': duplicate_key,  # For duplicate prevention
+                        'appliedAt': datetime.utcnow(),
+                        'updatedAt': datetime.utcnow()
+                    }
+                    
+                    result = applications_collection.insert_one(application)
+                    logger.info(f"Application stored with ID: {result.inserted_id}")
                 client.close()
         except Exception as e:
             logger.warning(f"Could not store application in database: {str(e)}")
@@ -1071,6 +1102,224 @@ async def apply_job(request: ApplyJobRequest):
         logger.error(f"Error applying for job: {str(e)}", exc_info=True)
         return create_error_response(error_code="APPLICATION_ERROR", error_message="Error processing job application", details=str(e))
 
+
+
+@app.post("/api/apply-job-with-resume")
+async def apply_job_with_resume(
+    resume: UploadFile = File(None, description="Resume file (PDF or DOCX)"),
+    candidate_name: str = Form(..., description="Candidate name"),
+    candidate_email: str = Form(..., description="Candidate email"),
+    job_id: str = Form(..., description="Job ID"),
+    job_title: str = Form(..., description="Job title"),
+    job_description: str = Form(..., description="Job description"),
+    required_skills: Optional[str] = Form(None, description="Comma-separated required skills"),
+    candidate_skills: Optional[str] = Form(None, description="Comma-separated candidate skills")
+):
+    """
+    Apply for a job with resume file upload or skills text input.
+    Handles both resume file uploads and text-based skill inputs.
+    Returns match percentage, matched skills, missing skills, and improvement suggestions.
+    """
+    try:
+        if not job_description or not job_description.strip():
+            raise HTTPException(status_code=400, detail="Job description cannot be empty")
+        
+        if not candidate_name or not candidate_name.strip():
+            raise HTTPException(status_code=400, detail="Candidate name is required")
+        
+        if not candidate_email or not candidate_email.strip():
+            raise HTTPException(status_code=400, detail="Candidate email is required")
+        
+        logger.info(f"Processing job application for {candidate_name} - Job: {job_title}")
+        
+        # Initialize NLP processor
+        try:
+            nlp = get_nlp_processor()
+        except Exception as e:
+            logger.error(f"NLP processor error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"NLP initialization failed: {str(e)}")
+        
+        # Extract resume text from file if provided
+        resume_text = ""
+        extracted_candidate_skills = []
+        
+        if resume and resume.filename:
+            try:
+                # Validate file extension
+                if not validate_file_extension(resume.filename, ALLOWED_EXTENSIONS):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Unsupported file format. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+                    )
+                
+                # Read and extract text from resume file
+                file_content = await resume.read()
+                resume_text, file_type = extract_text_from_resume(file_content, resume.filename)
+                resume_text = clean_resume_text(resume_text)
+                
+                # Extract skills from resume using NLP
+                candidate_skills_data = nlp.extract_skills(resume_text)
+                extracted_candidate_skills = candidate_skills_data.get('found_skills', [])
+                
+                logger.info(f"Extracted {len(extracted_candidate_skills)} skills from resume: {resume.filename}")
+            except Exception as e:
+                logger.error(f"Error processing resume file: {str(e)}")
+                raise HTTPException(status_code=400, detail=f"Error processing resume: {str(e)}")
+        else:
+            # Use provided skills text if no file uploaded
+            if candidate_skills:
+                skills_list = [s.strip() for s in candidate_skills.split(',') if s.strip()]
+                resume_text = f"Skills: {', '.join(skills_list)}"
+                extracted_candidate_skills = skills_list
+            else:
+                resume_text = f"Candidate {candidate_name}"
+        
+        # Parse required skills
+        job_skills = []
+        if required_skills:
+            job_skills = [s.strip() for s in required_skills.split(',') if s.strip()]
+        
+        # Extract job skills from description if not provided
+        if not job_skills:
+            try:
+                job_skills_data = nlp.extract_skills(job_description)
+                job_skills = job_skills_data.get('found_skills', [])
+            except Exception as e:
+                logger.warning(f"Skill extraction from job description failed: {str(e)}")
+                job_skills = []
+        
+        # Generate embeddings for semantic similarity
+        try:
+            job_embedding = nlp.get_embeddings([job_description])[0]
+            candidate_embedding = nlp.get_embeddings([resume_text])[0]
+            
+            # Calculate semantic similarity
+            semantic_score = float(np.dot(job_embedding, candidate_embedding) / (
+                np.linalg.norm(job_embedding) * np.linalg.norm(candidate_embedding) + 1e-10
+            ))
+            semantic_score = max(0.0, min(1.0, semantic_score))
+        except Exception as e:
+            logger.error(f"Embedding error: {str(e)}")
+            semantic_score = 0.5
+        
+        # Extract additional skills from resume text using NLP
+        if resume_text and not extracted_candidate_skills:
+            try:
+                candidate_skills_data = nlp.extract_skills(resume_text)
+                extracted_candidate_skills = candidate_skills_data.get('found_skills', [])
+            except Exception as e:
+                logger.warning(f"Candidate skill extraction failed: {str(e)}")
+        
+        # Combine all candidate skills (from file extraction + provided skills)
+        all_candidate_skills = set([s.lower() for s in extracted_candidate_skills])
+        
+        # Find matched and missing skills
+        matched_skills = []
+        missing_skills = []
+        
+        if job_skills:
+            for job_skill in job_skills:
+                if job_skill.lower() in all_candidate_skills:
+                    matched_skills.append(job_skill)
+                else:
+                    missing_skills.append(job_skill)
+            skill_score = len(matched_skills) / len(job_skills) if job_skills else 0.0
+        else:
+            skill_score = 0.5
+        
+        # Calculate final match percentage
+        final_score = (0.7 * semantic_score) + (0.3 * skill_score)
+        match_percentage = round(final_score * 100, 1)
+        
+        # Generate improvement suggestions
+        improvements = []
+        if missing_skills:
+            improvements.append(f"Learn these skills: {', '.join(missing_skills[:5])}")
+        improvements.append("Add specific project examples to your resume")
+        improvements.append("Include quantifiable achievements and metrics")
+        if matched_skills:
+            improvements.append(f"Highlight your experience with: {', '.join(matched_skills[:3])}")
+        improvements.append("Use keywords from the job description in your resume")
+        
+        # Store application in database with duplicate prevention
+        try:
+            client = get_mongodb_client()
+            if client:
+                db = client['resume-shortlister']
+                applications_collection = db['applications']
+                
+                # Check for duplicate application (same candidate email + job ID)
+                import hashlib
+                duplicate_key = hashlib.md5(
+                    f"{candidate_email.lower()}_{job_id}".encode()
+                ).hexdigest()
+                
+                existing_application = applications_collection.find_one({
+                    'duplicateKey': duplicate_key
+                })
+                
+                if existing_application:
+                    # Update existing application instead of creating duplicate
+                    applications_collection.update_one(
+                        {'duplicateKey': duplicate_key},
+                        {
+                            '$set': {
+                                'matchPercentage': match_percentage,
+                                'matchedSkills': matched_skills,
+                                'missingSkills': missing_skills,
+                                'semanticScore': float(semantic_score),
+                                'skillScore': float(skill_score),
+                                'appliedAt': datetime.utcnow(),
+                                'updatedAt': datetime.utcnow()
+                            }
+                        }
+                    )
+                    logger.info(f"Updated existing application for {candidate_email} - Job: {job_id}")
+                else:
+                    # Create new application
+                    application = {
+                        'jobId': job_id,
+                        'jobTitle': job_title,
+                        'candidateId': f'candidate_{datetime.utcnow().timestamp()}',
+                        'candidateName': candidate_name,
+                        'candidateEmail': candidate_email,
+                        'matchPercentage': match_percentage,
+                        'matchedSkills': matched_skills,
+                        'missingSkills': missing_skills,
+                        'semanticScore': float(semantic_score),
+                        'skillScore': float(skill_score),
+                        'duplicateKey': duplicate_key,  # For duplicate prevention
+                        'appliedAt': datetime.utcnow(),
+                        'updatedAt': datetime.utcnow()
+                    }
+                    
+                    result = applications_collection.insert_one(application)
+                    logger.info(f"Application stored with ID: {result.inserted_id}")
+                client.close()
+        except Exception as e:
+            logger.warning(f"Could not store application in database: {str(e)}")
+        
+        response_data = {
+            'matchPercentage': match_percentage,
+            'matched_skills': matched_skills,
+            'missing_skills': missing_skills,
+            'semantic_score': semantic_score,
+            'skill_score': skill_score,
+            'improvements': improvements,
+            'jobTitle': job_title,
+            'candidateName': candidate_name,
+            'message': f"Your resume is {match_percentage}% matched to the {job_title} position."
+        }
+        
+        logger.info(f"Application processed - Match: {match_percentage}%")
+        return create_success_response(data=response_data)
+        
+    except HTTPException as e:
+        logger.error(f"HTTP Error in job application: {e.detail}")
+        return create_error_response(error_code="HTTP_ERROR", error_message=str(e.detail))
+    except Exception as e:
+        logger.error(f"Error applying for job: {str(e)}", exc_info=True)
+        return create_error_response(error_code="APPLICATION_ERROR", error_message="Error processing job application", details=str(e))
 
 
 @app.get("/api/job-applications/{job_id}")
