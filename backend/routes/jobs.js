@@ -12,7 +12,7 @@ router.post('/', async (req, res) => {
       description,
       requiredSkills: requiredSkills ? (Array.isArray(requiredSkills) ? requiredSkills : requiredSkills.split(',').map(s => s.trim())) : [],
       minExperienceYears: minExperienceYears || 0,
-      createdBy
+      createdBy: createdBy || ''
     });
     await job.save();
     res.status(201).json(job);

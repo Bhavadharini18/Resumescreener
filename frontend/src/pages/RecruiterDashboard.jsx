@@ -9,11 +9,22 @@ export default function RecruiterDashboard(){
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [extractedSkills, setExtractedSkills] = useState([])
+  const [currentUser, setCurrentUser] = useState(null)
+  const [appliedCandidates, setAppliedCandidates] = useState([])
+  const [showApplicants, setShowApplicants] = useState(false)
 
   useEffect(() => {
+    // Get current recruiter from session
+    const user = JSON.parse(localStorage.getItem('quickz_session') || 'null')
+    setCurrentUser(user)
+    
     fetch('http://localhost:5000/api/jobs')
       .then(r => r.json())
-      .then(setJobs)
+      .then(jobs => {
+        // Filter jobs by current recruiter's email
+        const filtered = jobs.filter(j => j.createdBy === user?.email)
+        setJobs(filtered)
+      })
       .catch(() => setJobs([]))
   }, [])
 
@@ -75,6 +86,27 @@ export default function RecruiterDashboard(){
     setLoading(false)
   }
 
+  const handleViewApplicants = async (job) => {
+    setSelectedJob(job)
+    setLoading(true)
+    try {
+      const response = await fetch(`http://localhost:8000/api/job-applications/${job._id || job.id}`)
+      const data = await response.json()
+      if (data.data) {
+        setAppliedCandidates(data.data)
+      } else {
+        setAppliedCandidates([])
+      }
+      setShowApplicants(true)
+    } catch (err) {
+      console.error('Error fetching applications:', err)
+      setAppliedCandidates([])
+      setShowApplicants(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="recruiter-dashboard">
       <h2>Recruiter Dashboard</h2>
@@ -82,26 +114,37 @@ export default function RecruiterDashboard(){
 
       {/* Jobs Section */}
       <section className="dashboard-section">
-        <h3>Available Jobs</h3>
+        <h3>Your Posted Jobs</h3>
         <div className="jobs-grid">
           {jobs.length === 0 ? (
-            <p className="muted">No jobs available. Create one first.</p>
+            <p className="muted">You haven't posted any jobs yet.</p>
           ) : (
             jobs.map(j => (
               <div 
                 key={j._id} 
                 className={`job-card ${selectedJob?._id === j._id ? 'selected' : ''}`}
-                onClick={() => {
-                  setSelectedJob(j)
-                  setShowMatches(false)
-                  setCandidates([])
-                  setError(null)
-                }}
               >
                 <h4>{j.title}</h4>
                 <div className="muted">{j.company}</div>
                 <p>{j.description}</p>
                 <div className="skills">{(j.requiredSkills || []).join(', ')}</div>
+                <button
+                  onClick={() => handleViewApplicants(j)}
+                  style={{
+                    marginTop: '10px',
+                    width: '100%',
+                    padding: '8px 12px',
+                    backgroundColor: '#4CAF50',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  👥 View Applicants
+                </button>
               </div>
             ))
           )}
@@ -260,6 +303,144 @@ export default function RecruiterDashboard(){
           )}
         </section>
       )}
+
+      {/* Applicants Modal */}
+      {showApplicants && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '30px',
+            borderRadius: '8px',
+            maxWidth: '700px',
+            maxHeight: '80vh',
+            overflow: 'auto',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+          }}>
+            <h3>👥 Applicants for {selectedJob?.title}</h3>
+            
+            {!appliedCandidates || appliedCandidates.length === 0 ? (
+              <p style={{textAlign: 'center', color: '#999', padding: '40px 0'}}>No applications yet</p>
+            ) : (
+              <div style={{marginBottom: '20px'}}>
+                {appliedCandidates.map((candidate, idx) => {
+                  const matchPercentage = candidate.matchPercentage || 0
+                  const matchColor = matchPercentage >= 75 ? '#4CAF50' : matchPercentage >= 50 ? '#FFC107' : '#f44336'
+                  
+                  return (
+                    <div 
+                      key={idx}
+                      style={{
+                        border: `2px solid ${matchColor}`,
+                        borderRadius: '8px',
+                        padding: '15px',
+                        marginBottom: '15px',
+                        backgroundColor: '#f9f9f9'
+                      }}
+                    >
+                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px'}}>
+                        <div>
+                          <h4 style={{margin: '0 0 4px 0', color: '#333'}}>{candidate.candidateName}</h4>
+                          <p style={{margin: '0', color: '#666', fontSize: '13px'}}>{candidate.candidateEmail}</p>
+                        </div>
+                        <div style={{
+                          fontSize: '24px',
+                          fontWeight: 'bold',
+                          color: matchColor,
+                          textAlign: 'right'
+                        }}>
+                          {matchPercentage.toFixed(1)}%
+                        </div>
+                      </div>
+
+                      {candidate.matchedSkills && candidate.matchedSkills.length > 0 && (
+                        <div style={{marginBottom: '10px'}}>
+                          <div style={{fontSize: '12px', color: '#666', marginBottom: '5px'}}>✓ Matched Skills:</div>
+                          <div style={{display: 'flex', flexWrap: 'wrap', gap: '6px'}}>
+                            {candidate.matchedSkills.map((skill, i) => (
+                              <span 
+                                key={i}
+                                style={{
+                                  backgroundColor: '#c8e6c9',
+                                  color: '#2e7d32',
+                                  padding: '4px 10px',
+                                  borderRadius: '12px',
+                                  fontSize: '11px'
+                                }}
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {candidate.missingSkills && candidate.missingSkills.length > 0 && (
+                        <div style={{marginBottom: '10px'}}>
+                          <div style={{fontSize: '12px', color: '#666', marginBottom: '5px'}}>✗ Missing Skills:</div>
+                          <div style={{display: 'flex', flexWrap: 'wrap', gap: '6px'}}>
+                            {candidate.missingSkills.map((skill, i) => (
+                              <span 
+                                key={i}
+                                style={{
+                                  backgroundColor: '#ffcdd2',
+                                  color: '#c62828',
+                                  padding: '4px 10px',
+                                  borderRadius: '12px',
+                                  fontSize: '11px'
+                                }}
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {candidate.appliedAt && (
+                        <div style={{fontSize: '12px', color: '#999', marginTop: '10px', borderTop: '1px solid #ddd', paddingTop: '10px'}}>
+                          Applied: {new Date(candidate.appliedAt).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            <button 
+              onClick={() => {
+                setShowApplicants(false)
+                setSelectedJob(null)
+                setAppliedCandidates([])
+              }}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#1976d2',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                width: '100%'
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Applications & Shortlist Section */}
       <hr />
       <section className="dashboard-section">

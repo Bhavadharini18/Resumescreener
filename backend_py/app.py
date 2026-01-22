@@ -7,6 +7,7 @@ from pydantic import BaseModel
 import logging
 from pymongo import MongoClient
 import numpy as np
+from datetime import datetime
 
 from .config import ALLOWED_EXTENSIONS
 from .resume_parser import extract_text_from_resume, clean_resume_text
@@ -40,6 +41,18 @@ class MatchCandidatesRequest(BaseModel):
     requiredSkills: Optional[List[str]] = None
     jobTitle: Optional[str] = None
     company: Optional[str] = None
+
+class ApplyJobRequest(BaseModel):
+    """Request model for job application."""
+    jobId: str
+    jobTitle: str
+    jobDescription: str
+    requiredSkills: Optional[List[str]] = None
+    candidateId: str
+    candidateName: str
+    candidateEmail: str
+    resumeText: str
+    candidateSkills: Optional[List[str]] = None
 
 # Add CORS middleware
 app.add_middleware(
@@ -888,6 +901,219 @@ async def extract_skills(job_description: str):
             error_message="Error extracting skills",
             details=str(e)
         )
+
+
+@app.get("/api/latest-candidate")
+async def get_latest_candidate():
+    """Get the latest uploaded candidate data."""
+    try:
+        client = get_mongodb_client()
+        if client:
+            db = client['resume-shortlister']
+            candidates_collection = db['candidates']
+            latest = candidates_collection.find_one({}, sort=[('_id', -1)])
+            client.close()
+            
+            if latest:
+                return create_success_response(
+                    data={
+                        'id': str(latest.get('_id', '')),
+                        'name': latest.get('name', 'Unknown'),
+                        'email': latest.get('email', ''),
+                        'resumeText': latest.get('resumeText', ''),
+                        'skills': latest.get('skills', [])
+                    }
+                )
+        
+        return create_success_response(data={'name': 'Candidate', 'email': '', 'resumeText': '', 'skills': []})
+    except Exception as e:
+        logger.error(f"Error fetching latest candidate: {str(e)}")
+        return create_success_response(data={'name': 'Candidate', 'email': '', 'resumeText': '', 'skills': []})
+
+
+@app.post("/api/apply-job")
+async def apply_job(request: ApplyJobRequest):
+    """
+    Apply for a job and get resume matching analysis.
+    Returns match percentage, matched skills, missing skills, and improvement suggestions.
+    Also stores the application for the recruiter to see.
+    """
+    try:
+        if not request.jobDescription or not request.jobDescription.strip():
+            raise HTTPException(status_code=400, detail="Job description cannot be empty")
+        
+        logger.info(f"Processing job application for {request.candidateName} - Job: {request.jobTitle}")
+        
+        try:
+            nlp = get_nlp_processor()
+        except Exception as e:
+            logger.error(f"NLP processor error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"NLP initialization failed: {str(e)}")
+        
+        # Get job skills
+        job_skills = request.requiredSkills if request.requiredSkills else []
+        if not job_skills:
+            try:
+                job_skills_data = nlp.extract_skills(request.jobDescription)
+                job_skills = job_skills_data.get('found_skills', [])
+            except Exception as e:
+                logger.warning(f"Skill extraction failed: {str(e)}")
+                job_skills = []
+        
+        # Get candidate resume and skills
+        resume_text = request.resumeText or f"Skills: {', '.join(request.candidateSkills or [])}"
+        candidate_skills = request.candidateSkills or []
+        
+        if not resume_text or resume_text.strip() == "":
+            resume_text = f"Candidate {request.candidateName}"
+        
+        try:
+            # Generate embeddings
+            job_embedding = nlp.get_embeddings([request.jobDescription])[0]
+            candidate_embedding = nlp.get_embeddings([resume_text])[0]
+            
+            # Calculate semantic similarity
+            semantic_score = float(np.dot(job_embedding, candidate_embedding) / (
+                np.linalg.norm(job_embedding) * np.linalg.norm(candidate_embedding) + 1e-10
+            ))
+            semantic_score = max(0.0, min(1.0, semantic_score))
+        except Exception as e:
+            logger.error(f"Embedding error: {str(e)}")
+            semantic_score = 0.5
+        
+        try:
+            # Extract skills using NLP
+            candidate_skills_data = nlp.extract_skills(resume_text)
+            candidate_skills_extracted = candidate_skills_data.get('found_skills', [])
+        except Exception as e:
+            logger.warning(f"Candidate skill extraction failed: {str(e)}")
+            candidate_skills_extracted = []
+        
+        # Combine all candidate skills
+        candidate_skills_lower = set([s.lower() for s in (candidate_skills or [])])
+        candidate_skills_extracted_lower = set([s.lower() for s in candidate_skills_extracted])
+        all_candidate_skills = candidate_skills_lower.union(candidate_skills_extracted_lower)
+        
+        # Find matched and missing skills
+        matched_skills = []
+        missing_skills = []
+        
+        if job_skills:
+            for job_skill in job_skills:
+                if job_skill.lower() in all_candidate_skills:
+                    matched_skills.append(job_skill)
+                else:
+                    missing_skills.append(job_skill)
+            skill_score = len(matched_skills) / len(job_skills) if job_skills else 0.0
+        else:
+            skill_score = 0.5
+        
+        # Combine scores
+        final_score = (0.7 * semantic_score) + (0.3 * skill_score)
+        match_percentage = round(final_score * 100, 1)
+        
+        # Generate improvement suggestions
+        improvements = []
+        if missing_skills:
+            improvements.append(f"Learn: {', '.join(missing_skills[:3])}")
+        improvements.append("Add specific project examples to your resume")
+        improvements.append("Include quantifiable achievements and metrics")
+        if matched_skills:
+            improvements.append(f"Highlight your experience with: {', '.join(matched_skills[:3])}")
+        improvements.append("Use keywords from the job description in your resume")
+        
+        # Store application in database
+        try:
+            client = get_mongodb_client()
+            if client:
+                db = client['resume-shortlister']
+                applications_collection = db['applications']
+                
+                application = {
+                    'jobId': request.jobId,
+                    'jobTitle': request.jobTitle,
+                    'candidateId': request.candidateId,
+                    'candidateName': request.candidateName,
+                    'candidateEmail': request.candidateEmail,
+                    'matchPercentage': match_percentage,
+                    'matchedSkills': matched_skills,
+                    'missingSkills': missing_skills,
+                    'semanticScore': float(semantic_score),
+                    'skillScore': float(skill_score),
+                    'appliedAt': datetime.utcnow()
+                }
+                
+                result = applications_collection.insert_one(application)
+                logger.info(f"Application stored with ID: {result.inserted_id}")
+                client.close()
+        except Exception as e:
+            logger.warning(f"Could not store application in database: {str(e)}")
+        
+        response_data = {
+            'matchPercentage': match_percentage,
+            'matched_skills': matched_skills,
+            'missing_skills': missing_skills,
+            'semantic_score': semantic_score,
+            'skill_score': skill_score,
+            'improvements': improvements,
+            'jobTitle': request.jobTitle,
+            'candidateName': request.candidateName,
+            'message': f"Your resume is {match_percentage}% matched to the {request.jobTitle} position."
+        }
+        
+        logger.info(f"Application processed - Match: {match_percentage}%")
+        return create_success_response(data=response_data)
+        
+    except HTTPException as e:
+        logger.error(f"HTTP Error in job application: {e.detail}")
+        return create_error_response(error_code="HTTP_ERROR", error_message=str(e.detail))
+    except Exception as e:
+        logger.error(f"Error applying for job: {str(e)}", exc_info=True)
+        return create_error_response(error_code="APPLICATION_ERROR", error_message="Error processing job application", details=str(e))
+
+
+
+@app.get("/api/job-applications/{job_id}")
+async def get_job_applications(job_id: str):
+    """
+    Get all applications for a specific job (for recruiter dashboard).
+    """
+    try:
+        client = get_mongodb_client()
+        if client:
+            db = client['resume-shortlister']
+            applications_collection = db['applications']
+            
+            applications = list(applications_collection.find({'jobId': job_id}))
+            client.close()
+            
+            # Convert ObjectId to string for JSON serialization
+            applications = [
+                {
+                    'candidateName': app.get('candidateName', ''),
+                    'candidateEmail': app.get('candidateEmail', ''),
+                    'matchPercentage': app.get('matchPercentage', 0),
+                    'matchedSkills': app.get('matchedSkills', []),
+                    'missingSkills': app.get('missingSkills', []),
+                    'semanticScore': app.get('semanticScore', 0),
+                    'skillScore': app.get('skillScore', 0),
+                    'appliedAt': str(app.get('appliedAt', '')),
+                    '_id': str(app.get('_id', ''))
+                } for app in applications
+            ]
+            
+            # Sort by match percentage (descending)
+            applications.sort(key=lambda x: x.get('matchPercentage', 0), reverse=True)
+            
+            return create_success_response(
+                data=applications,
+                message=f"Found {len(applications)} applications for job"
+            )
+        
+        return create_success_response(data=[])
+    except Exception as e:
+        logger.error(f"Error fetching job applications: {str(e)}")
+        return create_error_response(error_code="FETCH_ERROR", error_message="Error fetching applications", details=str(e))
 
 
 if __name__ == "__main__":

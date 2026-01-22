@@ -10,9 +10,11 @@ export default function PostJob(){
   const submit=async e=>{
     e.preventDefault()
     try{
-      const res = await fetch('http://localhost:5000/api/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,company,description,requiredSkills:skills})})
+      const user = JSON.parse(localStorage.getItem('quickz_session') || 'null')
+      const createdBy = user?.email || ''
+      const res = await fetch('http://localhost:5000/api/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,company,description,requiredSkills:skills,createdBy})})
       if(!res.ok) throw new Error('Failed')
-      setMsg('Job posted')
+      setMsg('Job posted successfully')
       setTitle(''); setCompany(''); setDescription(''); setSkills('')
     }catch(err){ setMsg('Error posting job') }
   }
