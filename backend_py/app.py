@@ -1322,6 +1322,154 @@ async def apply_job_with_resume(
         return create_error_response(error_code="APPLICATION_ERROR", error_message="Error processing job application", details=str(e))
 
 
+@app.get("/api/explore-jobs")
+async def explore_jobs():
+    """
+    Get all jobs for the Explore page with detailed information.
+    Returns comprehensive job data including skills, requirements, and metadata.
+    """
+    try:
+        # Try to fetch from Node.js backend first, then fallback to sample data
+        jobs_data = []
+        try:
+            import requests
+            response = requests.get('http://localhost:5000/api/jobs', timeout=5)
+            if response.status_code == 200:
+                jobs_data = response.json()
+                logger.info(f"Fetched {len(jobs_data)} jobs from Node.js backend")
+        except Exception as e:
+            logger.warning(f"Could not fetch jobs from Node.js backend: {str(e)}")
+        
+        # Fallback to sample jobs if no backend available
+        if not jobs_data:
+            jobs_data = [
+                {
+                    "id": 1,
+                    "title": "Senior Python Developer",
+                    "company": "TechCorp Inc.",
+                    "location": "San Francisco, CA",
+                    "type": "Full-time",
+                    "experience": "Senior",
+                    "description": "We are looking for an experienced Python developer with expertise in Django, Flask, and cloud technologies. You will be working on scalable web applications and microservices architecture.",
+                    "requiredSkills": ["Python", "Django", "Flask", "PostgreSQL", "AWS", "Docker", "REST API"],
+                    "optionalSkills": ["React", "Redis", "Kubernetes", "GraphQL"],
+                    "salary": "$120,000 - $160,000",
+                    "posted": "2 days ago"
+                },
+                {
+                    "id": 2,
+                    "title": "Frontend React Developer",
+                    "company": "Digital Solutions Ltd",
+                    "location": "New York, NY",
+                    "type": "Full-time",
+                    "experience": "Mid-level",
+                    "description": "Join our frontend team to build amazing user interfaces using React, TypeScript, and modern CSS frameworks. Experience with state management and testing required.",
+                    "requiredSkills": ["React", "JavaScript", "TypeScript", "CSS", "HTML", "Redux"],
+                    "optionalSkills": ["Next.js", "Vue.js", "Angular", "Testing Libraries"],
+                    "salary": "$90,000 - $120,000",
+                    "posted": "1 week ago"
+                },
+                {
+                    "id": 3,
+                    "title": "Full Stack Node.js Engineer",
+                    "company": "StartupHub",
+                    "location": "Remote",
+                    "type": "Full-time",
+                    "experience": "Mid-level",
+                    "description": "Looking for a versatile Node.js developer who can handle both frontend and backend development. Experience with Express, MongoDB, and modern frontend frameworks required.",
+                    "requiredSkills": ["Node.js", "Express", "MongoDB", "JavaScript", "React", "REST API"],
+                    "optionalSkills": ["TypeScript", "PostgreSQL", "Docker", "AWS", "GraphQL"],
+                    "salary": "$100,000 - $140,000",
+                    "posted": "3 days ago"
+                },
+                {
+                    "id": 4,
+                    "title": "Data Science Engineer",
+                    "company": "AI Analytics Corp",
+                    "location": "Boston, MA",
+                    "type": "Full-time",
+                    "experience": "Senior",
+                    "description": "Seeking a data scientist with strong Python skills and experience in machine learning, deep learning, and big data technologies. PhD or Masters preferred.",
+                    "requiredSkills": ["Python", "Machine Learning", "TensorFlow", "SQL", "Statistics", "Data Analysis"],
+                    "optionalSkills": ["PyTorch", "Scikit-learn", "Big Data", "AWS", "Docker"],
+                    "salary": "$130,000 - $180,000",
+                    "posted": "1 day ago"
+                },
+                {
+                    "id": 5,
+                    "title": "DevOps Engineer",
+                    "company": "Cloud Systems Inc",
+                    "location": "Seattle, WA",
+                    "type": "Full-time",
+                    "experience": "Mid-level",
+                    "description": "We need a DevOps engineer to manage our cloud infrastructure, implement CI/CD pipelines, and ensure system reliability. Experience with AWS and containerization required.",
+                    "requiredSkills": ["AWS", "Docker", "Kubernetes", "CI/CD", "Linux", "Bash"],
+                    "optionalSkills": ["Terraform", "Ansible", "Monitoring Tools", "Networking"],
+                    "salary": "$110,000 - $150,000",
+                    "posted": "4 days ago"
+                },
+                {
+                    "id": 6,
+                    "title": "Mobile React Native Developer",
+                    "company": "AppWorks Studio",
+                    "location": "Austin, TX",
+                    "type": "Full-time",
+                    "experience": "Mid-level",
+                    "description": "Create amazing mobile experiences using React Native. You'll work on iOS and Android apps, collaborate with designers, and implement best practices for mobile development.",
+                    "requiredSkills": ["React Native", "JavaScript", "React", "Mobile Development", "iOS", "Android"],
+                    "optionalSkills": ["TypeScript", "Redux", "Native Modules", "Performance Optimization"],
+                    "salary": "$95,000 - $130,000",
+                    "posted": "5 days ago"
+                }
+            ]
+        
+        # Extract all unique skills from jobs for skills analysis
+        all_skills = set()
+        for job in jobs_data:
+            if job.get('requiredSkills'):
+                all_skills.update(job['requiredSkills'])
+            if job.get('optionalSkills'):
+                all_skills.update(job['optionalSkills'])
+        
+        # Create skills analysis data
+        skills_analysis = []
+        for skill in all_skills:
+            required_count = sum(1 for job in jobs_data if job.get('requiredSkills') and skill in job['requiredSkills'])
+            optional_count = sum(1 for job in jobs_data if job.get('optionalSkills') and skill in job['optionalSkills'])
+            total_count = required_count + optional_count
+            
+            skills_analysis.append({
+                "name": skill,
+                "requiredIn": required_count,
+                "optionalIn": optional_count,
+                "totalJobs": total_count,
+                "importance": "core" if required_count > total_count * 0.5 else "optional"
+            })
+        
+        # Sort skills by total jobs
+        skills_analysis.sort(key=lambda x: x['totalJobs'], reverse=True)
+        
+        response_data = {
+            "jobs": jobs_data,
+            "skills": skills_analysis,
+            "totalJobs": len(jobs_data),
+            "totalSkills": len(skills_analysis)
+        }
+        
+        return create_success_response(
+            data=response_data,
+            message=f"Found {len(jobs_data)} jobs and {len(skills_analysis)} unique skills"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error fetching explore jobs: {str(e)}")
+        return create_error_response(
+            error_code="EXPLORE_JOBS_ERROR",
+            error_message="Error fetching jobs and skills data",
+            details=str(e)
+        )
+
+
 @app.get("/api/job-applications/{job_id}")
 async def get_job_applications(job_id: str):
     """

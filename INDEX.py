@@ -484,19 +484,3 @@ def print_index():
 if __name__ == "__main__":
     print_index()
     
-    print("""
-
-╔════════════════════════════════════════════════════════════════╗
-║                      NEXT STEPS                               ║
-╚════════════════════════════════════════════════════════════════╝
-
-1. Read README_SYSTEM.md for complete documentation
-2. Run TESTING_GUIDE.py to validate installation
-3. Follow QUICKSTART.py for first run
-4. Check sample_data.py for test data
-5. Start the system and begin screening resumes!
-
-Questions? Check README_SYSTEM.md or TESTING_GUIDE.py
-
-Happy Resume Screening! 🎉
-    """)

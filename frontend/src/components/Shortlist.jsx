@@ -16,7 +16,7 @@ export default function Shortlist() {
       <h2>Shortlist</h2>
       <div>
         <input value={keywords} onChange={e => setKeywords(e.target.value)} placeholder="react,node,aws" />
-        <button onClick={run}>Run</button>
+        <button onClick={run}>Shortlist</button>
       </div>
       <div>
         {results && results.length === 0 && <div>No matches</div>}

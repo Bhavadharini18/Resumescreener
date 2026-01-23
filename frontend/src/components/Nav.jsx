@@ -19,7 +19,7 @@ export default function Nav(){
         {/* Logo */}
         <Link to="/" className="navbar-brand">
           <span className="brand-icon">★</span>
-          <span className="brand-text">Resume Screener</span>
+          <span className="brand-text">Quickz</span>
         </Link>
 
         {/* Mobile Menu Toggle */}
@@ -35,9 +35,12 @@ export default function Nav(){
         {/* Navigation Menu */}
         <nav className={`navbar-menu ${mobileMenuOpen ? 'active' : ''}`}>
           <div className="nav-section">
-            <span className="nav-title">Explore</span>
+            <span className="nav-title"></span>
             <Link to="/" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
               Home
+            </Link>
+            <Link to="/explore" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
+              Explore Jobs & Skills
             </Link>
             <Link to="/jobs" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
               Browse Jobs
@@ -53,7 +56,7 @@ export default function Nav(){
           <div className="nav-section">
             {user ? (
               <>
-                <span className="nav-title">Account</span>
+                <span className="nav-title"></span>
                 <div className="nav-user-info">
                   <div>
                     <span className="user-name">{user.name}</span>
@@ -78,7 +81,7 @@ export default function Nav(){
               </>
             ) : (
               <>
-                <span className="nav-title">Authentication</span>
+                <span className="nav-title"></span>
                 <Link to="/register" className="nav-link nav-link-highlight" onClick={() => setMobileMenuOpen(false)}>
                   Create Account
                 </Link>
