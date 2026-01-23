@@ -27,12 +27,21 @@ export default function Jobs(){
   const [formErrors, setFormErrors] = useState({})
 
   const handleApply = (job) => {
+    // Check if user is logged in as candidate
+    if (!currentUser || currentUser.role !== 'candidate') {
+      // Redirect to login if not authenticated as candidate
+      window.location.href = '/login'
+      return
+    }
+    
     setSelectedJob(job)
     setShowApplyForm(true)
     setApplicationResult(null)
+    
+    // Pre-fill form with logged-in user's information
     setFormData({
-      candidateName: '',
-      candidateEmail: '',
+      candidateName: currentUser.name || '',
+      candidateEmail: currentUser.email || '',
       resumeFile: null,
       candidateSkills: ''
     })
@@ -207,7 +216,7 @@ export default function Jobs(){
               >
                 👥 View Applicants
               </button>
-            ) : !currentUser && (
+            ) : currentUser && currentUser.role === 'candidate' ? (
               <button 
                 onClick={() => handleApply(j)}
                 style={{
@@ -224,7 +233,29 @@ export default function Jobs(){
               >
                 Apply Now
               </button>
-            )}
+            ) : !currentUser ? (
+              <div style={{
+                marginTop: '10px',
+                padding: '8px 16px',
+                backgroundColor: '#f5f5f5',
+                color: '#666',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '14px',
+                textAlign: 'center'
+              }}>
+                <a 
+                  href="/login" 
+                  style={{
+                    color: '#1976d2',
+                    textDecoration: 'none',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Sign in to Apply
+                </a>
+              </div>
+            ) : null}
           </div>
         ))}
         {jobs.length===0 && <div>No jobs yet</div>}
@@ -279,15 +310,23 @@ export default function Jobs(){
                   value={formData.candidateName}
                   onChange={handleFormInputChange}
                   placeholder="Enter your full name"
+                  readOnly={!!currentUser}
                   style={{
                     width: '100%',
                     padding: '12px',
                     border: `2px solid ${formErrors.candidateName ? '#f44336' : '#ddd'}`,
                     borderRadius: '6px',
                     fontSize: '15px',
-                    boxSizing: 'border-box'
+                    boxSizing: 'border-box',
+                    backgroundColor: currentUser ? '#f5f5f5' : 'white',
+                    cursor: currentUser ? 'not-allowed' : 'text'
                   }}
                 />
+                {currentUser && (
+                  <div style={{ color: '#666', fontSize: '12px', marginTop: '5px' }}>
+                    ✓ Pre-filled from your account
+                  </div>
+                )}
                 {formErrors.candidateName && (
                   <div style={{ color: '#f44336', fontSize: '13px', marginTop: '5px' }}>
                     {formErrors.candidateName}
@@ -311,15 +350,23 @@ export default function Jobs(){
                   value={formData.candidateEmail}
                   onChange={handleFormInputChange}
                   placeholder="your.email@example.com"
+                  readOnly={!!currentUser}
                   style={{
                     width: '100%',
                     padding: '12px',
                     border: `2px solid ${formErrors.candidateEmail ? '#f44336' : '#ddd'}`,
                     borderRadius: '6px',
                     fontSize: '15px',
-                    boxSizing: 'border-box'
+                    boxSizing: 'border-box',
+                    backgroundColor: currentUser ? '#f5f5f5' : 'white',
+                    cursor: currentUser ? 'not-allowed' : 'text'
                   }}
                 />
+                {currentUser && (
+                  <div style={{ color: '#666', fontSize: '12px', marginTop: '5px' }}>
+                    ✓ Pre-filled from your account
+                  </div>
+                )}
                 {formErrors.candidateEmail && (
                   <div style={{ color: '#f44336', fontSize: '13px', marginTop: '5px' }}>
                     {formErrors.candidateEmail}
