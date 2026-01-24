@@ -904,14 +904,17 @@ async def extract_skills(job_description: str):
 
 
 @app.get("/api/latest-candidate")
-async def get_latest_candidate():
-    """Get the latest uploaded candidate data."""
+async def get_latest_candidate(email: Optional[str] = None):
+    """Get the candidate data for the email if provided, otherwise latest uploaded."""
     try:
         client = get_mongodb_client()
         if client:
             db = client['resume-shortlister']
             candidates_collection = db['candidates']
-            latest = candidates_collection.find_one({}, sort=[('_id', -1)])
+            if email:
+                latest = candidates_collection.find_one({"email": email})
+            else:
+                latest = candidates_collection.find_one({}, sort=[('_id', -1)])
             client.close()
             
             if latest:
@@ -920,8 +923,11 @@ async def get_latest_candidate():
                         'id': str(latest.get('_id', '')),
                         'name': latest.get('name', 'Unknown'),
                         'email': latest.get('email', ''),
-                        'resumeText': latest.get('resumeText', ''),
-                        'skills': latest.get('skills', [])
+                        'resumeText': latest.get('resumeText', '') or latest.get('resume_text', ''),
+                        'skills': latest.get('skills', []),
+                        'phone': latest.get('phone', ''),
+                        'experience': latest.get('experience', ''),
+                        'uploadedAt': str(latest.get('uploadedAt', ''))
                     }
                 )
         
@@ -1466,6 +1472,127 @@ async def explore_jobs():
         return create_error_response(
             error_code="EXPLORE_JOBS_ERROR",
             error_message="Error fetching jobs and skills data",
+            details=str(e)
+        )
+
+
+@app.post("/api/update-candidate")
+async def update_candidate(
+    name: str = Form(...),
+    email: str = Form(...),
+    phone: Optional[str] = Form(None),
+    experience: Optional[str] = Form(None),
+    skills: Optional[str] = Form(None),
+    resume: Optional[UploadFile] = File(None)
+):
+    """
+    Update an existing candidate profile in the database.
+    
+    Args:
+        name: Candidate's full name
+        email: Candidate's email address
+        phone: Candidate's phone number (optional)
+        experience: Candidate's work experience (optional)
+        skills: Candidate's skills as comma-separated string (optional)
+        resume: Resume file upload (optional)
+        
+    Returns:
+        Updated candidate profile data
+    """
+    try:
+        client = get_mongodb_client()
+        if not client:
+            raise HTTPException(
+                status_code=500,
+                detail="Database connection failed"
+            )
+        
+        db = client['resume-shortlister']
+        candidates_collection = db['candidates']
+        
+        # Parse skills
+        skills_list = []
+        if skills:
+            skills_list = [skill.strip() for skill in skills.split(',') if skill.strip()]
+        
+        # Process resume if uploaded
+        resume_text = ""
+        extracted_skills = []
+        
+        if resume:
+            try:
+                # Read and process resume file
+                resume_content = await resume.read()
+                
+                # Extract text from resume
+                resume_text = extract_text_from_resume(resume_content, resume.filename)
+                resume_text = clean_resume_text(resume_text)
+                
+                # Extract skills using NLP
+                nlp = get_nlp_processor()
+                skills_data = nlp.extract_skills(resume_text)
+                extracted_skills = skills_data.get('found_skills', [])
+                
+                # Combine manual skills and extracted skills
+                all_skills = list(set(skills_list + extracted_skills))
+                skills_list = all_skills
+                
+                logger.info(f"Processed resume for {name}: extracted {len(extracted_skills)} skills")
+                
+            except Exception as e:
+                logger.error(f"Error processing resume: {str(e)}")
+                # Continue without resume processing
+        
+        # Update candidate in database
+        update_data = {
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "experience": experience,
+            "skills": skills_list,
+            "resume_text": resume_text,
+            "uploadedAt": datetime.now()
+        }
+        
+        # Find and update existing candidate by email
+        existing_candidate = candidates_collection.find_one({"email": email})
+        
+        if existing_candidate:
+            # Update existing candidate
+            candidates_collection.update_one(
+                {"email": email},
+                {"$set": update_data}
+            )
+            update_data["_id"] = str(existing_candidate["_id"])
+        else:
+            # Create new candidate if not found
+            result = candidates_collection.insert_one(update_data)
+            update_data["_id"] = str(result.inserted_id)
+        
+        # Calculate candidate score
+        if skills_list:
+            scorer = CandidateScorer()
+            score_data = scorer.calculate_candidate_score(
+                skills=skills_list,
+                resume_text=resume_text
+            )
+            update_data.update(score_data)
+        
+        logger.info(f"Successfully updated candidate profile: {name} ({email})")
+        
+        return create_success_response(
+            data=update_data,
+            message="Candidate profile updated successfully"
+        )
+        
+    except HTTPException as e:
+        logger.error(f"HTTP Error in candidate update: {e.detail}")
+        return create_error_response(error_code="HTTP_ERROR", error_message=str(e.detail))
+    except Exception as e:
+        logger.error(f"Error updating candidate: {str(e)}", exc_info=True)
+        return create_error_response(
+            error_code="CANDIDATE_UPDATE_ERROR",
+            error_message="Error updating candidate profile",
             details=str(e)
         )
 

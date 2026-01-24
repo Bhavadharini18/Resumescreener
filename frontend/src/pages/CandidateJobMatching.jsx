@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { currentUser } from '../utils/auth'
 
 export default function CandidateJobMatching(){
   const [jobs, setJobs] = useState([])
@@ -8,21 +9,59 @@ export default function CandidateJobMatching(){
   const [error, setError] = useState(null)
   const [showMatches, setShowMatches] = useState(false)
   const [extractedSkills, setExtractedSkills] = useState([])
+  const [user, setUser] = useState(null)
 
   useEffect(() => {
-    // Fetch available jobs
-    fetch('http://localhost:5000/api/jobs')
-      .then(r => r.json())
-      .then(data => setJobs(data))
-      .catch(err => {
-        console.error('Error fetching jobs:', err)
-        setJobs([])
-      })
+    const loggedInUser = currentUser()
+    setUser(loggedInUser)
+    
+    if (loggedInUser && loggedInUser.role === 'candidate') {
+      fetchCandidateData(loggedInUser.email)
+    }
+    
+    fetchJobs()
   }, [])
 
+  const fetchCandidateData = async (emailOverride) => {
+    try {
+      const emailParam = emailOverride || user?.email
+        ? `?email=${encodeURIComponent(emailOverride || user.email)}`
+        : ''
+      const response = await fetch(`http://localhost:8000/api/latest-candidate${emailParam}`)
+      if (response.ok) {
+        const result = await response.json()
+        if (result.status === 'success' && result.data.skills) {
+          setCandidateSkills(result.data.skills)
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching candidate data:', err)
+    }
+  }
+
+  const fetchJobs = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/explore-jobs')
+      if (response.ok) {
+        const result = await response.json()
+        if (result.status === 'success') {
+          setJobs(result.data.jobs || [])
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching jobs:', err)
+      setJobs([])
+    }
+  }
+
   const handleFindMatches = async () => {
+    if (!user || user.role !== 'candidate') {
+      setError('Please log in as a candidate to find matches')
+      return
+    }
+
     if (!candidateSkills || candidateSkills.length === 0) {
-      setError('Please enter your skills first')
+      setError('No skills found in your profile. Please create your profile first.')
       return
     }
 
@@ -31,8 +70,7 @@ export default function CandidateJobMatching(){
     setMatchedJobs([])
 
     try {
-      // Call backend API to match jobs
-      const response = await fetch('http://localhost:8001/api/match-jobs', {
+      const response = await fetch('http://localhost:8000/api/match-jobs', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -57,11 +95,9 @@ export default function CandidateJobMatching(){
         return
       }
 
-      // Extract all job skills
       const allJobSkills = data.jobSkills || []
       setExtractedSkills(allJobSkills)
 
-      // Sort by match percentage
       const sortedMatches = data.matches.sort((a, b) => b.matchPercentage - a.matchPercentage)
       
       setMatchedJobs(sortedMatches)
@@ -76,42 +112,51 @@ export default function CandidateJobMatching(){
     setLoading(false)
   }
 
-  const handleSkillsChange = (e) => {
-    const input = e.target.value
-    // Split by comma and clean up
-    const skills = input.split(',').map(s => s.trim()).filter(s => s.length > 0)
-    setCandidateSkills(skills)
-  }
-
   return (
     <div className="candidate-job-matching">
       <h2>Find Matching Jobs</h2>
-      <p>Enter your skills and discover jobs that match your profile.</p>
+      <p>Discover jobs that match your profile based on your resume skills.</p>
 
-      {/* Candidate Skills Input Section */}
-      <section className="dashboard-section">
-        <h3>Your Skills</h3>
-        <div className="skills-input-section">
-          <textarea 
-            placeholder="Enter your skills separated by commas (e.g., Python, JavaScript, React, Node.js)"
-            value={candidateSkills.join(', ')}
-            onChange={handleSkillsChange}
-            rows="4"
-            className="skills-textarea"
-          />
-          <p className="info-text">
-            You have entered <strong>{candidateSkills.length}</strong> skill{candidateSkills.length !== 1 ? 's' : ''}
-          </p>
+      {!user || user.role !== 'candidate' ? (
+        <div className="auth-required">
+          <p>Please log in as a candidate to use this feature.</p>
         </div>
+      ) : (
+        <>
+          {/* Candidate Skills Display Section */}
+          <section className="dashboard-section">
+            <h3>Your Profile Skills</h3>
+            <div className="skills-display-section">
+              {candidateSkills.length > 0 ? (
+                <>
+                  <div className="skills-list">
+                    {candidateSkills.map((skill, i) => (
+                      <span key={i} className="skill-tag your-skill">
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="info-text">
+                    Found <strong>{candidateSkills.length}</strong> skill{candidateSkills.length !== 1 ? 's' : ''} in your profile
+                  </p>
+                </>
+              ) : (
+                <div className="no-skills-message">
+                  <p>No skills found in your profile. Please <a href="/profile">create your profile</a> first.</p>
+                </div>
+              )}
+            </div>
 
-        <button 
-          className="btn btn-primary btn-lg"
-          onClick={handleFindMatches}
-          disabled={candidateSkills.length === 0 || loading}
-        >
-          {loading ? 'Finding Matches...' : 'Find Matching Jobs'}
-        </button>
-      </section>
+            <button 
+              className="btn btn-primary btn-lg"
+              onClick={handleFindMatches}
+              disabled={candidateSkills.length === 0 || loading}
+            >
+              {loading ? 'Finding Matches...' : 'Find Matching Jobs'}
+            </button>
+          </section>
+        </>
+      )}
 
       {/* Error Message */}
       {error && (
@@ -224,6 +269,7 @@ export default function CandidateJobMatching(){
 
                   <div className="job-meta">
                     <span className="meta-item">💼 {job.company}</span>
+                    {job.salary && <span className="meta-item">💰 {job.salary}</span>}
                   </div>
                 </div>
               ))}
