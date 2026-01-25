@@ -57,12 +57,6 @@ export default function Nav(){
             {user ? (
               <>
                 <span className="nav-title"></span>
-                <div className="nav-user-info">
-                  <div>
-                    <span className="user-name">{user.name}</span>
-                    <span className="user-role">{user.role}</span>
-                  </div>
-                </div>
                 {user.role === 'recruiter' ? (
                   <Link to="/recruiter" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
                     Dashboard

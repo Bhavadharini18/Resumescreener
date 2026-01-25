@@ -14,15 +14,18 @@ export default function CandidateDashboard(){
     setUser(loggedInUser)
     
     if (loggedInUser && loggedInUser.role === 'candidate') {
-      fetchProfileData()
+      fetchProfileData(loggedInUser.email)
     } else {
       setLoading(false)
     }
   }, [])
 
-  const fetchProfileData = async () => {
+  const fetchProfileData = async (emailOverride) => {
     try {
-      const response = await fetch('http://localhost:8000/api/latest-candidate')
+      const emailParam = emailOverride || user?.email
+        ? `?email=${encodeURIComponent(emailOverride || user.email)}`
+        : ''
+      const response = await fetch(`http://localhost:8000/api/latest-candidate${emailParam}`)
       if (response.ok) {
         const result = await response.json()
         if (result.status === 'success' && result.data) {
@@ -85,13 +88,19 @@ export default function CandidateDashboard(){
       ) : (
         <>
           <section className="dashboard-section">
-            <h3>Welcome back, {profileData.name}!</h3>
+            <h3>Welcome back, {profileData.name || user?.name}!</h3>
             <div className="profile-summary">
               <div className="summary-item">
                 <strong>Skills:</strong> {profileData.skills ? profileData.skills.length : 0}
               </div>
               <div className="summary-item">
-                <strong>Email:</strong> {profileData.email}
+                <strong>Email:</strong> {user?.email || profileData.email}
+              </div>
+              <div className="summary-item">
+                <strong>Phone:</strong> {profileData.phone || 'Not provided'}
+              </div>
+              <div className="summary-item">
+                <strong>Experience:</strong> {profileData.experience || 'Not provided'}
               </div>
               {profileData.uploadedAt && (
                 <div className="summary-item">

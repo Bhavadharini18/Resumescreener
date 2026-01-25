@@ -5,6 +5,7 @@ export default function CandidateJobMatching(){
   const [jobs, setJobs] = useState([])
   const [matchedJobs, setMatchedJobs] = useState([])
   const [candidateSkills, setCandidateSkills] = useState([])
+  const [candidateProfile, setCandidateProfile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [showMatches, setShowMatches] = useState(false)
@@ -30,8 +31,9 @@ export default function CandidateJobMatching(){
       const response = await fetch(`http://localhost:8000/api/latest-candidate${emailParam}`)
       if (response.ok) {
         const result = await response.json()
-        if (result.status === 'success' && result.data.skills) {
-          setCandidateSkills(result.data.skills)
+        if (result.status === 'success' && result.data) {
+          setCandidateProfile(result.data)
+          setCandidateSkills(result.data.skills || [])
         }
       }
     } catch (err) {
@@ -123,6 +125,25 @@ export default function CandidateJobMatching(){
         </div>
       ) : (
         <>
+          {candidateProfile && (
+            <section className="dashboard-section">
+              <h3>Your Profile Details</h3>
+              <div className="profile-summary">
+                <div className="summary-item">
+                  <strong>Name:</strong> {candidateProfile.name || user?.name}
+                </div>
+                <div className="summary-item">
+                  <strong>Email:</strong> {user?.email || candidateProfile.email}
+                </div>
+                <div className="summary-item">
+                  <strong>Phone:</strong> {candidateProfile.phone || 'Not provided'}
+                </div>
+                <div className="summary-item">
+                  <strong>Experience:</strong> {candidateProfile.experience || 'Not provided'}
+                </div>
+              </div>
+            </section>
+          )}
           {/* Candidate Skills Display Section */}
           <section className="dashboard-section">
             <h3>Your Profile Skills</h3>
