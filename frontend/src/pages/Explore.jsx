@@ -30,7 +30,7 @@ export default function Explore() {
             // Only fetch candidate skills if user is logged in
             if (user && user.role === 'candidate') {
               try {
-                const candidateResponse = await fetch('http://localhost:8000/api/latest-candidate')
+                const candidateResponse = await fetch(`http://localhost:8000/api/latest-candidate?email=${encodeURIComponent(user.email)}`)
                 if (candidateResponse.ok) {
                   const candidateResult = await candidateResponse.json()
                   if (candidateResult.status === 'success') {
@@ -151,11 +151,6 @@ export default function Explore() {
         }).sort((a, b) => b.totalJobs - a.totalJobs)
         
         setSkills(skillsArray)
-        
-        // Only set candidate skills if user is logged in
-        if (user && user.role === 'candidate') {
-          setCandidateSkills(['Python', 'JavaScript', 'React', 'Node.js', 'SQL', 'AWS'])
-        }
         
       } catch (error) {
         console.error('Error fetching jobs:', error)

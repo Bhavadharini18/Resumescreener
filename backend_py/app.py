@@ -2,12 +2,15 @@
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from pydantic import BaseModel
 import logging
 from pymongo import MongoClient
 import numpy as np
 from datetime import datetime
+import pandas as pd
+import io
 
 from .config import ALLOWED_EXTENSIONS
 from .resume_parser import extract_text_from_resume, clean_resume_text
@@ -41,6 +44,13 @@ class MatchCandidatesRequest(BaseModel):
     requiredSkills: Optional[List[str]] = None
     jobTitle: Optional[str] = None
     company: Optional[str] = None
+
+class ExportCandidatesRequest(BaseModel):
+    """Request model for exporting candidates to Excel."""
+    candidates: List[dict]
+    jobTitle: str
+    company: str
+
 
 class ApplyJobRequest(BaseModel):
     """Request model for job application."""
@@ -1075,7 +1085,8 @@ async def apply_job(request: ApplyJobRequest):
                         'missingSkills': missing_skills,
                         'semanticScore': float(semantic_score),
                         'skillScore': float(skill_score),
-                        'duplicateKey': duplicate_key,  # For duplicate prevention
+                        'status': 'applied',
+                        'duplicateKey': duplicate_key,
                         'appliedAt': datetime.utcnow(),
                         'updatedAt': datetime.utcnow()
                     }
@@ -1551,7 +1562,8 @@ async def update_candidate(
             "experience": experience,
             "skills": skills_list,
             "resume_text": resume_text,
-            "uploadedAt": datetime.now()
+            "uploadedAt": datetime.now(),
+            "updatedAt": datetime.utcnow()
         }
         
         # Find and update existing candidate by email
@@ -1609,6 +1621,18 @@ async def get_job_applications(job_id: str):
             applications_collection = db['applications']
             
             applications = list(applications_collection.find({'jobId': job_id}))
+            
+            # Enrich with candidate phone/experience from candidates collection
+            candidates_collection = db['candidates']
+            for app in applications:
+                candidate = candidates_collection.find_one({'email': app.get('candidateEmail', '')})
+                if candidate:
+                    app['phone'] = candidate.get('phone', '')
+                    app['experience'] = candidate.get('experience', '')
+                else:
+                    app['phone'] = ''
+                    app['experience'] = ''
+            
             client.close()
             
             # Convert ObjectId to string for JSON serialization
@@ -1616,6 +1640,9 @@ async def get_job_applications(job_id: str):
                 {
                     'candidateName': app.get('candidateName', ''),
                     'candidateEmail': app.get('candidateEmail', ''),
+                    'phone': app.get('phone', ''),
+                    'experience': app.get('experience', ''),
+                    'status': app.get('status', 'applied'),
                     'matchPercentage': app.get('matchPercentage', 0),
                     'matchedSkills': app.get('matchedSkills', []),
                     'missingSkills': app.get('missingSkills', []),
@@ -1638,6 +1665,243 @@ async def get_job_applications(job_id: str):
     except Exception as e:
         logger.error(f"Error fetching job applications: {str(e)}")
         return create_error_response(error_code="FETCH_ERROR", error_message="Error fetching applications", details=str(e))
+
+
+@app.get("/api/candidate-applications")
+async def get_candidate_applications(email: str = None):
+    """
+    Get all applications for a specific candidate by email.
+    """
+    try:
+        if not email:
+            return create_error_response(error_code="MISSING_EMAIL", error_message="Email parameter is required")
+        
+        client = get_mongodb_client()
+        if client:
+            db = client['resume-shortlister']
+            applications_collection = db['applications']
+            jobs_collection = db['jobs']
+            
+            applications = list(applications_collection.find({'candidateEmail': email}))
+            
+            enriched_applications = []
+            for app in applications:
+                job = jobs_collection.find_one({'id': app.get('jobId', '')})
+                if job:
+                    enriched_app = {
+                        'jobTitle': job.get('title', 'N/A'),
+                        'company': job.get('company', 'N/A'),
+                        'location': job.get('location', 'N/A'),
+                        'jobDescription': job.get('description', ''),
+                        'requiredSkills': job.get('requiredSkills', []),
+                        'optionalSkills': job.get('optionalSkills', []),
+                        'type': job.get('type', 'N/A'),
+                        'experience': job.get('experience', 'N/A'),
+                        'salary': job.get('salary', 'N/A'),
+                        'posted': job.get('posted', 'N/A'),
+                        'jobId': app.get('jobId', ''),
+                        'appliedAt': app.get('appliedAt', ''),
+                        'status': app.get('status', 'applied'),
+                        'matchPercentage': app.get('matchPercentage', 0),
+                        'matchedSkills': app.get('matchedSkills', []),
+                        'missingSkills': app.get('missingSkills', []),
+                        'semanticScore': app.get('semanticScore', 0),
+                        'skillScore': app.get('skillScore', 0)
+                    }
+                else:
+                    enriched_app = {
+                        'jobTitle': app.get('jobTitle', 'N/A'),
+                        'company': 'N/A',
+                        'location': 'N/A',
+                        'jobDescription': '',
+                        'requiredSkills': [],
+                        'optionalSkills': [],
+                        'type': 'N/A',
+                        'experience': 'N/A',
+                        'salary': 'N/A',
+                        'posted': 'N/A',
+                        'jobId': app.get('jobId', ''),
+                        'appliedAt': app.get('appliedAt', ''),
+                        'status': app.get('status', 'applied'),
+                        'matchPercentage': app.get('matchPercentage', 0),
+                        'matchedSkills': app.get('matchedSkills', []),
+                        'missingSkills': app.get('missingSkills', []),
+                        'semanticScore': app.get('semanticScore', 0),
+                        'skillScore': app.get('skillScore', 0)
+                    }
+                enriched_applications.append(enriched_app)
+            
+            client.close()
+            
+            enriched_applications.sort(key=lambda x: x.get('appliedAt', ''), reverse=True)
+            
+            return create_success_response(
+                data={'applications': enriched_applications},
+                message=f"Found {len(enriched_applications)} applications"
+            )
+        
+        return create_success_response(data={'applications': []})
+    except Exception as e:
+        logger.error(f"Error fetching candidate applications: {str(e)}")
+        return create_error_response(error_code="FETCH_ERROR", error_message="Error fetching applications", details=str(e))
+
+
+@app.post("/api/withdraw-application")
+async def withdraw_application(request: dict):
+    """
+    Withdraw a job application.
+    """
+    try:
+        candidate_email = request.get('candidateEmail')
+        job_id = request.get('jobId')
+        
+        if not candidate_email or not job_id:
+            return create_error_response(error_code="MISSING_PARAMS", error_message="Candidate email and job ID required")
+        
+        client = get_mongodb_client()
+        if client:
+            db = client['resume-shortlister']
+            applications_collection = db['applications']
+            
+            result = applications_collection.delete_one({
+                'candidateEmail': candidate_email,
+                'jobId': job_id
+            })
+            
+            client.close()
+            
+            if result.deleted_count > 0:
+                return create_success_response(message="Application withdrawn successfully")
+            else:
+                return create_error_response(error_code="NOT_FOUND", error_message="Application not found")
+        
+        return create_error_response(error_code="DB_ERROR", error_message="Database connection failed")
+    except Exception as e:
+        logger.error(f"Error withdrawing application: {str(e)}")
+        return create_error_response(error_code="WITHDRAW_ERROR", error_message="Error withdrawing application", details=str(e))
+
+
+@app.post("/api/update-application-status")
+async def update_application_status(request: dict):
+    """
+    Update application status (recruiter only).
+    """
+    try:
+        candidate_email = request.get('candidateEmail')
+        job_id = request.get('jobId')
+        status = request.get('status')
+        
+        if not candidate_email or not job_id or not status:
+            return create_error_response(error_code="MISSING_PARAMS", error_message="Candidate email, job ID, and status required")
+        
+        valid_statuses = ['applied', 'under_review', 'shortlisted', 'rejected']
+        if status not in valid_statuses:
+            return create_error_response(error_code="INVALID_STATUS", error_message=f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
+        
+        client = get_mongodb_client()
+        if client:
+            db = client['resume-shortlister']
+            applications_collection = db['applications']
+            
+            result = applications_collection.update_one(
+                {
+                    'candidateEmail': candidate_email,
+                    'jobId': job_id
+                },
+                {
+                    '$set': {
+                        'status': status,
+                        'updatedAt': datetime.utcnow()
+                    }
+                }
+            )
+            
+            client.close()
+            
+            if result.modified_count > 0:
+                return create_success_response(message="Application status updated successfully")
+            else:
+                return create_error_response(error_code="NOT_FOUND", error_message="Application not found")
+        
+        return create_error_response(error_code="DB_ERROR", error_message="Database connection failed")
+    except Exception as e:
+        logger.error(f"Error updating application status: {str(e)}")
+        return create_error_response(error_code="UPDATE_ERROR", error_message="Error updating application status", details=str(e))
+
+
+@app.post("/api/export-candidates")
+async def export_candidates(request: ExportCandidatesRequest):
+    """
+    Export candidates to Excel file.
+    
+    Args:
+        request: ExportCandidatesRequest containing candidates list and job info
+        
+    Returns:
+        Excel file as streaming response
+    """
+    try:
+        if not request.candidates:
+            raise HTTPException(status_code=400, detail="No candidates to export")
+        
+        # Prepare data for Excel
+        rows = []
+        for c in request.candidates:
+            rows.append({
+                'Name': c.get('candidateName', ''),
+                'Email': c.get('candidateEmail', ''),
+                'Phone': c.get('phone', ''),
+                'Experience': c.get('experience', ''),
+                'Current Status': c.get('status', 'applied').replace('_', ' ').title() if c.get('status') else 'Applied',
+                'Match %': f"{c.get('matchPercentage', 0):.1f}%",
+                'Matched Skills': ', '.join(c.get('matchedSkills', [])),
+                'Missing Skills': ', '.join(c.get('missingSkills', [])),
+                'Semantic Score': f"{c.get('semanticScore', 0)*100:.1f}%" if c.get('semanticScore') else '',
+                'Skill Score': f"{c.get('skillScore', 0)*100:.1f}%" if c.get('skillScore') else '',
+                'Applied At': c.get('appliedAt', '')
+            })
+        
+        # Create DataFrame
+        df = pd.DataFrame(rows)
+        
+        # Write Excel to BytesIO
+        output = io.BytesIO()
+        try:
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False, sheet_name='Candidates')
+                worksheet = writer.sheets['Candidates']
+                
+                # Auto-adjust column widths
+                for idx, col in enumerate(df.columns):
+                    series = df[col]
+                    max_len = max(
+                        series.astype(str).map(len).max(),
+                        len(str(col))
+                    ) + 2
+                    worksheet.set_column(idx, idx, max_len)
+        except Exception as excel_err:
+            logger.error(f"Excel generation error: {excel_err}")
+            raise HTTPException(status_code=500, detail=f"Excel generation failed: {excel_err}")
+        
+        output.seek(0)
+        
+        # Sanitize filename: replace non-ASCII with underscores and remove special chars
+        import re
+        safe_title = re.sub(r'[^\x00-\x7F]+', '_', request.jobTitle)
+        safe_title = re.sub(r'[\\/*?:"<>|]', '_', safe_title)
+        filename = f"{safe_title.strip('_')}_candidates.xlsx"
+        
+        return StreamingResponse(
+            io.BytesIO(output.getvalue()),
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting candidates: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
 
 if __name__ == "__main__":

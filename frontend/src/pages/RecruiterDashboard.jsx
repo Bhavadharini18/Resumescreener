@@ -13,6 +13,33 @@ export default function RecruiterDashboard(){
   const [appliedCandidates, setAppliedCandidates] = useState([])
   const [showApplicants, setShowApplicants] = useState(false)
 
+  const updateCandidateStatus = async (candidateEmail, jobId, newStatus) => {
+    try {
+      const response = await fetch('http://localhost:8000/api/update-application-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          candidateEmail: candidateEmail,
+          jobId: jobId,
+          status: newStatus
+        })
+      })
+
+      if (response.ok) {
+        // Refresh the matched candidates list to show updated status
+        if (selectedJob) {
+          findMatches(selectedJob)
+        }
+      } else {
+        setError('Failed to update status')
+      }
+    } catch (err) {
+      setError('Error updating status: ' + err.message)
+    }
+  }
+
   useEffect(() => {
     // Get current recruiter from session
     const user = JSON.parse(localStorage.getItem('quickz_session') || 'null')
@@ -39,51 +66,69 @@ export default function RecruiterDashboard(){
     setCandidates([])
 
     try {
-      // Call backend API to get matched candidates using Python NLP algorithms
-      const response = await fetch('http://localhost:8001/api/match-candidates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jobDescription: selectedJob.description,
-          requiredSkills: selectedJob.requiredSkills || [],
-          jobTitle: selectedJob.title,
-          company: selectedJob.company
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`)
-      }
-
+      // Fetch applied candidates for the selected job
+      const response = await fetch(`http://localhost:8000/api/job-applications/${selectedJob._id || selectedJob.id}`)
       const data = await response.json()
-
-      if (!data.matches || data.matches.length === 0) {
-        setError('No matches found')
+      
+      if (!response.ok || !data.data) {
+        setError('No applications found for this job')
         setCandidates([])
         setShowMatches(true)
         setLoading(false)
         return
       }
 
-      // Extract required skills from response or use job skills
-      const requiredSkills = data.requiredSkills || selectedJob.requiredSkills || []
-      setExtractedSkills(requiredSkills)
-
-      // Sort by match percentage
-      const sortedMatches = data.matches.sort((a, b) => b.matchPercentage - a.matchPercentage)
+      // Use applied candidates as the list; they already have match scores
+      const sortedCandidates = data.data.sort((a, b) => (b.matchPercentage || 0) - (a.matchPercentage || 0))
       
-      setCandidates(sortedMatches)
+      setCandidates(sortedCandidates)
       setShowMatches(true)
       setError(null)
     } catch (err) {
-      setError('Error finding matches: ' + err.message)
+      setError('Error fetching applied candidates: ' + err.message)
       setCandidates([])
       setShowMatches(true)
     }
 
     setLoading(false)
+  }
+
+  const exportToExcel = async () => {
+    if (!selectedJob || !candidates.length) {
+      setError('No candidates to export')
+      return
+    }
+
+    try {
+      const response = await fetch('http://localhost:8000/api/export-candidates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidates: candidates,
+          jobTitle: selectedJob.title,
+          company: selectedJob.company
+        })
+      })
+
+      if (!response.ok) {
+        const errText = await response.text()
+        console.error('Export error response:', errText)
+        throw new Error(`Export failed: ${response.status} ${errText}`)
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${selectedJob.title.replace(/\s+/g, '_')}_candidates.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Export exception:', err)
+      setError('Export failed: ' + err.message)
+    }
   }
 
   const handleViewApplicants = async (job) => {
@@ -161,6 +206,25 @@ export default function RecruiterDashboard(){
             </div>
           )}
         </div>
+        <div style={{marginBottom: '15px'}}>
+          <label htmlFor="jobSelect" style={{display: 'block', marginBottom: '5px', fontWeight: 'bold'}}>Select Job:</label>
+          <select 
+            id="jobSelect"
+            value={selectedJob?._id || selectedJob?.id || ''}
+            onChange={(e) => {
+              const job = jobs.find(j => (j._id || j.id) === e.target.value)
+              setSelectedJob(job || null)
+            }}
+            style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc'}}
+          >
+            <option value="">-- Choose a job --</option>
+            {jobs.map(j => (
+              <option key={j._id || j.id} value={j._id || j.id}>
+                {j.title} at {j.company}
+              </option>
+            ))}
+          </select>
+        </div>
         <button 
           className="btn btn-primary btn-lg"
           onClick={findMatches}
@@ -202,104 +266,119 @@ export default function RecruiterDashboard(){
               <p className="muted">No matches found</p>
             </div>
           ) : (
-            <div className="candidates-list">
-              {candidates.map((candidate, idx) => (
-                <div key={idx} className="candidate-card">
-                  <div className="candidate-header">
-                    <div>
-                      <h4>{candidate.name}</h4>
-                      <p className="muted">{candidate.email}</p>
-                    </div>
-                    <div className={`match-badge match-${candidate.matchPercentage >= 70 ? 'high' : candidate.matchPercentage >= 40 ? 'medium' : 'low'}`}>
-                      {Math.round(candidate.matchPercentage)}%
-                    </div>
-                  </div>
-                  
-                  {/* Candidate Basic Information */}
-                  <div className="candidate-details">
-                    <div className="detail-item">
-                      <strong>📧 Email:</strong> {candidate.email || 'N/A'}
-                    </div>
-                    <div className="detail-item">
-                      <strong>📞 Phone:</strong> {candidate.phone || 'N/A'}
-                    </div>
-                    <div className="detail-item">
-                      <strong>💼 Experience:</strong> {candidate.experience || 'N/A'}
-                    </div>
-                  </div>
-                  
-                  {/* All Candidate Skills Database */}
-                  {candidate.skills && candidate.skills.length > 0 && (
-                    <div className="skills-section">
-                      <strong>💾 Database Skills ({candidate.skills.length}):</strong>
-                      <div className="skills-list">
-                        {candidate.skills.map((skill, i) => (
-                          <span 
-                            key={i} 
-                            className={`skill-tag ${
-                              candidate.matchedSkills?.includes(skill) ? 'matched' : 'extra'
-                            }`}
-                          >
-                            {skill}
-                          </span>
-                        ))}
+            <>
+              <div className="export-section">
+                <button className="btn" onClick={exportToExcel}>
+                  📥 Export to Excel
+                </button>
+              </div>
+              <div className="candidates-list">
+                {candidates.map((candidate, idx) => (
+                  <div key={idx} className="candidate-card">
+                    <div className="candidate-header">
+                      <div>
+                        <h4>{candidate.candidateName}</h4>
+                        <p className="muted">{candidate.candidateEmail}</p>
+                      </div>
+                      <div className={`match-badge match-${candidate.matchPercentage >= 70 ? 'high' : candidate.matchPercentage >= 40 ? 'medium' : 'low'}`}>
+                        {Math.round(candidate.matchPercentage || 0)}%
                       </div>
                     </div>
-                  )}
-                  
-                  {/* Skill Comparison */}
-                  <div className="skill-comparison">
-                    {/* Matched Skills */}
-                    {candidate.matchedSkills && candidate.matchedSkills.length > 0 && (
-                      <div className="skills-section">
-                        <strong>✓ Matched Skills ({candidate.matchedSkills.length}):</strong>
-                        <div className="skills-list">
-                          {candidate.matchedSkills.map((skill, i) => (
-                            <span key={i} className="skill-tag matched">
+                    
+                    {/* Candidate Basic Information */}
+                    <div className="candidate-details">
+                      <div className="detail-item">
+                        <strong>📧 Email:</strong> {candidate.candidateEmail || 'N/A'}
+                      </div>
+                      <div className="detail-item">
+                        <strong>📞 Phone:</strong> {candidate.phone || 'N/A'}
+                      </div>
+                      <div className="detail-item">
+                        <strong>💼 Experience:</strong> {candidate.experience || 'N/A'}
+                      </div>
+                    </div>
+                    
+                    {/* Skill Comparison */}
+                    <div className="skills-comparison">
+                      <h5>✅ Matched Skills:</h5>
+                      <div className="skills-list">
+                        {candidate.matchedSkills && candidate.matchedSkills.length > 0 ? (
+                          candidate.matchedSkills.map((skill, i) => (
+                            <span key={i} className="skill-tag required">
                               {skill}
                             </span>
-                          ))}
+                          ))
+                        ) : (
+                          <span className="muted">No matched skills</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="skills-comparison">
+                      <h5>❌ Missing Skills:</h5>
+                      <div className="skills-list">
+                        {candidate.missingSkills && candidate.missingSkills.length > 0 ? (
+                          candidate.missingSkills.map((skill, i) => (
+                            <span key={i} className="skill-tag missing">
+                              {skill}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="muted">All required skills matched</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Match Details */}
+                    {candidate.semanticScore !== undefined && (
+                      <div className="match-details">
+                        <div className="score-item">
+                          <strong>🧠 Semantic Relevance:</strong> {(candidate.semanticScore * 100).toFixed(1)}%
+                        </div>
+                        <div className="score-item">
+                          <strong>🎯 Skill Match Score:</strong> {(candidate.skillScore * 100).toFixed(1)}%
                         </div>
                       </div>
                     )}
                     
-                    {/* Missing Skills */}
-                    {candidate.missingSkills && candidate.missingSkills.length > 0 && (
-                      <div className="skills-section">
-                        <strong>✗ Missing Skills ({candidate.missingSkills.length}):</strong>
-                        <div className="skills-list">
-                          {candidate.missingSkills.map((skill, i) => (
-                            <span key={i} className="skill-tag missing">
-                              {skill}
-                            </span>
-                          ))}
-                        </div>
+                    {/* Overall Match Score */}
+                    <div className="overall-score">
+                      <strong>Overall Match Score: {Math.round(candidate.matchPercentage || 0)}%</strong>
+                      <div className="score-bar">
+                        <div className="score-fill" style={{width: `${candidate.matchPercentage || 0}%`}}></div>
                       </div>
-                    )}
-                  </div>
+                    </div>
 
-                  {/* Match Details */}
-                  {candidate.semanticScore !== undefined && (
-                    <div className="match-details">
-                      <div className="score-item">
-                        <strong>🧠 Semantic Relevance:</strong> {(candidate.semanticScore * 100).toFixed(1)}%
+                    {/* Status Update Actions */}
+                    <div className="status-actions">
+                      <strong>Current Status: <span className={`status-badge status-${candidate.status?.replace('_', '-') || 'applied'}`}>
+                        {candidate.status ? candidate.status.replace('_', ' ').toUpperCase() : 'APPLIED'}
+                      </span></strong>
+                      <div className="status-buttons">
+                        <button 
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => updateCandidateStatus(candidate.candidateEmail, selectedJob.id || selectedJob._id, 'under_review')}
+                        >
+                          Under Review
+                        </button>
+                        <button 
+                          className="btn btn-sm btn-success"
+                          onClick={() => updateCandidateStatus(candidate.candidateEmail, selectedJob.id || selectedJob._id, 'shortlisted')}
+                        >
+                          Shortlist
+                        </button>
+                        <button 
+                          className="btn btn-sm btn-danger"
+                          onClick={() => updateCandidateStatus(candidate.candidateEmail, selectedJob.id || selectedJob._id, 'rejected')}
+                        >
+                          Reject
+                        </button>
                       </div>
-                      <div className="score-item">
-                        <strong>🎯 Skill Match Score:</strong> {(candidate.skillScore * 100).toFixed(1)}%
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Overall Match Score */}
-                  <div className="overall-score">
-                    <strong>Overall Match Score: {Math.round(candidate.matchPercentage)}%</strong>
-                    <div className="score-bar">
-                      <div className="score-fill" style={{width: `${candidate.matchPercentage}%`}}></div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </>
           )}
         </section>
       )}

@@ -10,6 +10,7 @@ import Register from './pages/auth/Register'
 import CandidateDashboard from './pages/CandidateDashboard'
 import RecruiterDashboard from './pages/RecruiterDashboard'
 import Profile from './pages/Profile'
+import MyActivities from './pages/MyActivities'
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/candidate" element={<CandidateDashboard />} />
           <Route path="/recruiter" element={<RecruiterDashboard />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/my-activities" element={<MyActivities />} />
         </Routes>
       </main>
     </div>

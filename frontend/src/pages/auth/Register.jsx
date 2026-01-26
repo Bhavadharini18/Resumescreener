@@ -6,14 +6,18 @@ export default function Register(){
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [role, setRole] = useState('candidate')
+  const [phone, setPhone] = useState('')
+  const [experience, setExperience] = useState('')
+  const [company, setCompany] = useState('')
   const [error, setError] = useState('')
   const navigate = useNavigate()
 
   const submit = e => {
     e.preventDefault()
     try{
-      const user = register({ name, email, password, role })
+      const user = register({ name, email, password, role, phone, experience, company })
       if (user.role === 'recruiter') navigate('/recruiter')
       else navigate('/candidate')
       window.location.reload()
@@ -52,14 +56,33 @@ export default function Register(){
           </div>
           <div className="form-group">
             <label htmlFor="password">Password</label>
-            <input 
-              id="password"
-              type="password" 
-              value={password} 
-              onChange={e=>setPassword(e.target.value)} 
-              placeholder="Enter a strong password"
-              required 
-            />
+            <div style={{ position: 'relative' }}>
+              <input 
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={password} 
+                onChange={e=>setPassword(e.target.value)} 
+                placeholder="Enter a strong password"
+                required 
+                style={{ paddingRight: '40px', width: '100%' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '16px'
+                }}
+              >
+                {showPassword ? '👁' : '👁‍🗨'}
+              </button>
+            </div>
           </div>
           <div className="form-group">
             <label htmlFor="role">I am a</label>
@@ -68,6 +91,42 @@ export default function Register(){
               <option value="recruiter">Recruiter</option>
             </select>
           </div>
+          {role === 'candidate' && (
+            <>
+              <div className="form-group">
+                <label htmlFor="phone">Phone (10 digits)</label>
+                <input 
+                  id="phone"
+                  type="tel"
+                  value={phone} 
+                  onChange={e=>setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} 
+                  placeholder="1234567890"
+                  pattern="[0-9]{10}"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="experience">Experience</label>
+                <textarea 
+                  id="experience"
+                  value={experience} 
+                  onChange={e=>setExperience(e.target.value)} 
+                  placeholder="Your work experience"
+                  rows="3"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="company">Company/College</label>
+                <input 
+                  id="company"
+                  type="text"
+                  value={company} 
+                  onChange={e=>setCompany(e.target.value)} 
+                  placeholder="Current or previous company/college"
+                />
+              </div>
+            </>
+          )}
           {error && <div className="error-message">{error}</div>}
           <button type="submit" className="auth-button">Create Account</button>
         </form>

@@ -69,6 +69,9 @@ export default function Nav(){
                     <Link to="/candidate" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
                       Find Matches
                     </Link>
+                    <Link to="/my-activities" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
+                      My Activities
+                    </Link>
                   </>
                 )}
                 <button className="nav-link logout-btn" onClick={() => {
