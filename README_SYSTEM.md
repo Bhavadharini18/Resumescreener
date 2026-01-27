@@ -2,7 +2,7 @@
 
 A production-ready AI-powered system for automatically screening multiple resumes and ranking candidates based on job descriptions using NLP and semantic similarity.
 
-## 🎯 Project Overview
+##  Project Overview
 
 This system combines modern NLP techniques with explainable AI to:
 - Parse and extract text from multiple resume formats (PDF, DOCX)
@@ -11,7 +11,7 @@ This system combines modern NLP techniques with explainable AI to:
 - Produce explainable match scores with detailed breakdowns
 - Rank candidates based on a weighted scoring formula
 
-## 🏗️ Architecture
+##  Architecture
 
 ```
 Resume Screening System
@@ -28,7 +28,7 @@ Resume Screening System
     └── streamlit_app.py    # Interactive UI
 ```
 
-## 🔧 Tech Stack
+##  Tech Stack
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
@@ -40,7 +40,7 @@ Resume Screening System
 | **Frontend Demo** | Streamlit | Interactive web interface |
 | **Server** | Uvicorn | ASGI server |
 
-## 📊 Scoring Logic
+##  Scoring Logic
 
 **Final Score Formula:**
 ```
@@ -58,7 +58,7 @@ Final Score = 0.7 × Semantic Similarity + 0.3 × Skill Match Score
    - Extracted using pattern matching against skills database
    - Explainable: shows matched, missing, and additional skills
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Prerequisites
 - Python 3.8+
@@ -111,7 +111,7 @@ python app.py
 
 Then use the API endpoints directly via curl or Postman.
 
-## 📡 API Endpoints
+##  API Endpoints
 
 ### 1. Screen Multiple Resumes
 **POST** `/api/screen-resumes`
@@ -199,7 +199,7 @@ curl "http://localhost:8000/api/extract-skills?job_description=Looking%20for%20P
 
 Check if API is running.
 
-## 💡 Usage Examples
+## Usage Examples
 
 ### Example 1: Batch Screening with Streamlit UI
 
@@ -251,7 +251,7 @@ for candidate in results['data']['ranked_candidates']:
     print(f"  Missing Skills: {', '.join(candidate['skill_match']['missing_skills'])}")
 ```
 
-## 📋 Skills Database
+##  Skills Database
 
 The system includes 70+ predefined technical and soft skills:
 
@@ -269,7 +269,7 @@ The system includes 70+ predefined technical and soft skills:
 
 Easily extend by editing `backend_py/skills_database.py`
 
-## ⚙️ Configuration
+##  Configuration
 
 Edit `backend_py/config.py` to customize:
 
@@ -291,7 +291,7 @@ API_HOST = "0.0.0.0"
 API_PORT = 8000
 ```
 
-## 🧪 Testing
+##  Testing
 
 ### Test with Sample Files
 
@@ -305,20 +305,20 @@ API_PORT = 8000
 pytest tests/ -v
 ```
 
-## 🔒 Privacy & Ethics
+## Privacy & Ethics
 
 **Bias Mitigation:**
-- ✅ Text-based matching only (no name, gender, age processing)
-- ✅ Skill-focused evaluation
-- ✅ Explainable scoring
-- ✅ No demographic inference
+-  Text-based matching only (no name, gender, age processing)
+-  Skill-focused evaluation
+-  Explainable scoring
+-  No demographic inference
 
 **Data Handling:**
 - No data persistence by default
 - Files processed in-memory only
 - GDPR-ready with no storage
 
-## 📈 Performance Characteristics
+##  Performance Characteristics
 
 | Metric | Value |
 |--------|-------|
@@ -328,7 +328,7 @@ pytest tests/ -v
 | Batch Scoring (10 resumes) | ~2-3 seconds |
 | Memory Usage | ~1 GB (with models loaded) |
 
-## 🚦 Production Deployment
+##  Production Deployment
 
 ### Docker (Coming Soon)
 
@@ -351,16 +351,8 @@ docker run -p 8000:8000 resume-screener
 3. **Async Operations:** FastAPI handles concurrent requests
 4. **Load Balancing:** Deploy multiple API instances behind a load balancer
 
-## 🤝 Contributing
 
-Contributions welcome! Please:
-
-1. Follow code style in existing files
-2. Add docstrings to functions
-3. Test changes thoroughly
-4. Update README if adding features
-
-## 📄 File Structure
+## File Structure
 
 ```
 resume shortlister/
@@ -379,7 +371,7 @@ resume shortlister/
     └── utils.py                  # Utilities
 ```
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### "Cannot connect to API"
 - Ensure backend is running: `python backend_py/app.py`
@@ -400,7 +392,7 @@ python -m spacy download en_core_web_sm
 - Check file size < 10MB
 - Try re-saving PDF/DOCX file
 
-## 📚 References
+## References
 
 - [Sentence Transformers](https://www.sbert.net/)
 - [SpaCy Documentation](https://spacy.io/)
@@ -408,22 +400,3 @@ python -m spacy download en_core_web_sm
 - [Streamlit](https://streamlit.io/)
 - [scikit-learn](https://scikit-learn.org/)
 
-## 📝 License
-
-MIT License - Feel free to use in your projects
-
-## 🎓 Hackathon Details
-
-- **Project Goal:** Resume screening and candidate ranking
-- **Tech Stack:** Python, FastAPI, NLP, ML
-- **Evaluation Criteria:** Functionality, Code Quality, Explainability
-- **Submission:** This repository
-
----
-
-**Ready to screen resumes? Start with:**
-```bash
-python backend_py/app.py
-# In another terminal:
-streamlit run streamlit_app.py
-```

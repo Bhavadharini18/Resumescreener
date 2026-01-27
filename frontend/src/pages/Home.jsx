@@ -11,12 +11,12 @@ export default function Home(){
   }, [])
 
   const features = [
-    { icon: '⚡', title: 'AI-Powered Matching', description: 'Advanced semantic matching using Sentence Transformers to find perfect candidate-job alignments.' },
-    { icon: '📊', title: 'Skill-Based Ranking', description: 'Intelligent skill extraction and matching with 70+ technical and soft skills database.' },
-    { icon: '✓', title: 'Transparent Scoring', description: 'See exactly how candidates are scored with breakdown of semantic and skill components.' },
-    { icon: '⚙', title: 'Lightning Fast', description: 'Process 50 resumes in seconds using optimized NLP pipelines and parallel processing.' },
-    { icon: '•', title: 'Multi-Format Support', description: 'Seamlessly handle PDF and DOCX resume formats with intelligent text extraction.' },
-    { icon: '→', title: 'Detailed Insights', description: 'Get comprehensive reports showing matched skills, missing qualifications, and match confidence.' },
+    { icon: '', title: 'AI-Powered Matching', description: 'Advanced semantic matching using Sentence Transformers to find perfect candidate-job alignments.' },
+    { icon: '', title: 'Skill-Based Ranking', description: 'Intelligent skill extraction and matching with 70+ technical and soft skills database.' },
+    { icon: '', title: 'Transparent Scoring', description: 'See exactly how candidates are scored with breakdown of semantic and skill components.' },
+    { icon: '', title: 'Lightning Fast', description: 'Process 50 resumes in seconds using optimized NLP pipelines and parallel processing.' },
+    { icon: '', title: 'Multi-Format Support', description: 'Seamlessly handle PDF and DOCX resume formats with intelligent text extraction.' },
+    { icon: '', title: 'Detailed Insights', description: 'Get comprehensive reports showing matched skills, missing qualifications, and match confidence.' },
   ]
 
   const steps = [
@@ -50,20 +50,7 @@ export default function Home(){
               <Link to="/jobs" className="btn btn-primary btn-lg">Browse Jobs</Link>
               <Link to="/register" className="btn btn-secondary btn-lg">Get Started</Link>
             </div>
-            <div className="hero-stats">
-              <div className="stat-item">
-                <div className="stat-number">5000+</div>
-                <div className="stat-label">Resumes Processed</div>
-              </div>
-              <div className="stat-item">
-                <div className="stat-number">95%</div>
-                <div className="stat-label">Match Accuracy</div>
-              </div>
-              <div className="stat-item">
-                <div className="stat-number">80%</div>
-                <div className="stat-label">Time Saved</div>
-              </div>
-            </div>
+            
           </div>
           <div className="hero-visual">
             <div className="floating-card card-1">

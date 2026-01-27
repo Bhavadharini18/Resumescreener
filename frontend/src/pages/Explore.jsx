@@ -247,14 +247,14 @@ export default function Explore() {
               className={`view-toggle-btn ${viewMode === 'jobs' ? 'active' : ''}`}
               onClick={() => setViewMode('jobs')}
             >
-              <span className="toggle-icon">💼</span>
+              <span className="toggle-icon"></span>
               Explore by Jobs
             </button>
             <button
               className={`view-toggle-btn ${viewMode === 'skills' ? 'active' : ''}`}
               onClick={() => setViewMode('skills')}
             >
-              <span className="toggle-icon">🎯</span>
+              <span className="toggle-icon"></span>
               Explore by Skills
             </button>
           </div>

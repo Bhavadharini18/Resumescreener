@@ -18,7 +18,7 @@ export default function Nav(){
       <div className="navbar-container">
         {/* Logo */}
         <Link to="/" className="navbar-brand">
-          <span className="brand-icon">★</span>
+          <span className="brand-icon"></span>
           <span className="brand-text">Quickz</span>
         </Link>
 

@@ -270,7 +270,7 @@ export default function MyActivities() {
               {activities.map((activity, index) => (
                 <div key={index} className="timeline-item">
                   <div className="timeline-marker">
-                    {activity.type === 'application' ? '📋' : '👤'}
+                    {activity.type === 'application' ? '' : ''}
                   </div>
                   <div className="timeline-content">
                     <div className="timeline-header">
