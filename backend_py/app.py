@@ -937,14 +937,15 @@ async def get_latest_candidate(email: Optional[str] = None):
                         'skills': latest.get('skills', []),
                         'phone': latest.get('phone', ''),
                         'experience': latest.get('experience', ''),
+                        'company': latest.get('company', ''),
                         'uploadedAt': str(latest.get('uploadedAt', ''))
                     }
                 )
         
-        return create_success_response(data={'name': 'Candidate', 'email': '', 'resumeText': '', 'skills': []})
+        return create_success_response(data={'name': 'Candidate', 'email': '', 'resumeText': '', 'skills': [], 'phone': '', 'experience': '', 'company': ''})
     except Exception as e:
         logger.error(f"Error fetching latest candidate: {str(e)}")
-        return create_success_response(data={'name': 'Candidate', 'email': '', 'resumeText': '', 'skills': []})
+        return create_success_response(data={'name': 'Candidate', 'email': '', 'resumeText': '', 'skills': [], 'phone': '', 'experience': '', 'company': ''})
 
 
 @app.post("/api/apply-job")
@@ -1487,12 +1488,113 @@ async def explore_jobs():
         )
 
 
+@app.post("/api/register-candidate")
+async def register_candidate(
+    name: str = Form(...),
+    email: str = Form(...),
+    phone: Optional[str] = Form(None),
+    experience: Optional[str] = Form(None),
+    company: Optional[str] = Form(None)
+):
+    """
+    Register a new candidate and save their data to the database.
+    
+    Args:
+        name: Candidate's full name
+        email: Candidate's email address
+        phone: Candidate's phone number (optional)
+        experience: Candidate's work experience (optional)
+        company: Candidate's company or college (optional)
+        
+    Returns:
+        Success message and candidate data
+    """
+    try:
+        client = get_mongodb_client()
+        if not client:
+            raise HTTPException(
+                status_code=500,
+                detail="Database connection failed"
+            )
+        
+        db = client['resume-shortlister']
+        candidates_collection = db["candidates"]
+        
+        # Check if candidate already exists
+        existing_candidate = candidates_collection.find_one({"email": email})
+        if existing_candidate:
+            return {
+                "status": "success",
+                "message": "Candidate already exists",
+                "data": {
+                    "name": existing_candidate.get("name", ""),
+                    "email": existing_candidate.get("email", ""),
+                    "phone": existing_candidate.get("phone", ""),
+                    "experience": existing_candidate.get("experience", ""),
+                    "company": existing_candidate.get("company", ""),
+                    "skills": existing_candidate.get("skills", []),
+                    "uploadedAt": existing_candidate.get("uploadedAt"),
+                    "updatedAt": existing_candidate.get("updatedAt")
+                }
+            }
+        
+        # Create new candidate record
+        candidate_data = {
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "experience": experience,
+            "company": company,
+            "skills": [],
+            "resume_text": "",
+            "uploadedAt": datetime.now(),
+            "updatedAt": datetime.utcnow()
+        }
+        
+        # Insert candidate into database
+        result = candidates_collection.insert_one(candidate_data)
+        
+        if result.inserted_id:
+            return {
+                "status": "success",
+                "message": "Candidate registered successfully",
+                "data": {
+                    "name": name,
+                    "email": email,
+                    "phone": phone,
+                    "experience": experience,
+                    "company": company,
+                    "skills": [],
+                    "uploadedAt": candidate_data["uploadedAt"],
+                    "updatedAt": candidate_data["updatedAt"]
+                }
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to register candidate"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error registering candidate: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Registration failed: {str(e)}"
+        )
+    finally:
+        if client:
+            client.close()
+
+
 @app.post("/api/update-candidate")
 async def update_candidate(
     name: str = Form(...),
     email: str = Form(...),
     phone: Optional[str] = Form(None),
     experience: Optional[str] = Form(None),
+    company: Optional[str] = Form(None),
     skills: Optional[str] = Form(None),
     resume: Optional[UploadFile] = File(None)
 ):
@@ -1504,6 +1606,7 @@ async def update_candidate(
         email: Candidate's email address
         phone: Candidate's phone number (optional)
         experience: Candidate's work experience (optional)
+        company: Candidate's company or college (optional)
         skills: Candidate's skills as comma-separated string (optional)
         resume: Resume file upload (optional)
         
@@ -1560,6 +1663,7 @@ async def update_candidate(
             "email": email,
             "phone": phone,
             "experience": experience,
+            "company": company,
             "skills": skills_list,
             "resume_text": resume_text,
             "uploadedAt": datetime.now(),

@@ -11,6 +11,7 @@ export default function Profile() {
     email: '',
     phone: '',
     experience: '',
+    company: '',
     skills: '',
     resumeFile: null
   })
@@ -29,12 +30,13 @@ export default function Profile() {
 
   const fetchProfileData = async (emailOverride) => {
     try {
-      const emailParam = emailOverride || user?.email
-        ? `?email=${encodeURIComponent(emailOverride || user.email)}`
-        : ''
+      const email = emailOverride || user?.email
+      const emailParam = email ? `?email=${encodeURIComponent(email)}` : ''
+      console.log('Fetching profile data for email:', email)
       const response = await fetch(`http://localhost:8000/api/latest-candidate${emailParam}`)
       if (response.ok) {
         const result = await response.json()
+        console.log('Profile data fetched:', result)
         if (result.status === 'success' && result.data) {
           setProfileData(result.data)
           setFormData({
@@ -42,6 +44,7 @@ export default function Profile() {
             email: user?.email || result.data.email || '',
             phone: result.data.phone || '',
             experience: result.data.experience || '',
+            company: result.data.company || '',
             skills: result.data.skills ? result.data.skills.join(', ') : '',
             resumeFile: null
           })
@@ -67,6 +70,7 @@ export default function Profile() {
         email: profileData.email || '',
         phone: profileData.phone || '',
         experience: profileData.experience || '',
+        company: profileData.company || '',
         skills: profileData.skills ? profileData.skills.join(', ') : '',
         resumeFile: null
       })
@@ -88,6 +92,7 @@ export default function Profile() {
     form.append('email', user?.email || formData.email)
     form.append('phone', formData.phone)
     form.append('experience', formData.experience)
+    form.append('company', formData.company || '')
     form.append('skills', cleanedSkills.join(', '))
     if (formData.resumeFile) {
       form.append('resume', formData.resumeFile)
@@ -230,6 +235,18 @@ export default function Profile() {
             </div>
 
             <div className="form-group">
+              <label htmlFor="company">Company/College</label>
+              <input
+                type="text"
+                id="company"
+                name="company"
+                value={formData.company}
+                onChange={handleInputChange}
+                placeholder="Current company or college"
+              />
+            </div>
+
+            <div className="form-group">
               <label htmlFor="skills">Skills (comma-separated)</label>
               <input
                 type="text"
@@ -286,6 +303,10 @@ export default function Profile() {
 
           <div className="profile-section">
             <h3>Professional Information</h3>
+            <div className="info-item">
+              <label>Company/College:</label>
+              <p>{profileData.company || 'Not provided'}</p>
+            </div>
             <div className="info-item">
               <label>Experience:</label>
               <p>{profileData.experience || 'Not provided'}</p>

@@ -117,11 +117,6 @@ export default function CandidateDashboard(){
       {profileData && (
         <>
           <hr />
-          <section className="dashboard-section">
-            <h3>Update Resume</h3>
-            <p>Upload an updated resume to improve your job matches.</p>
-            <UploadForm />
-          </section>
         </>
       )}
     </div>

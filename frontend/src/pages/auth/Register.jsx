@@ -14,14 +14,48 @@ export default function Register(){
   const [error, setError] = useState('')
   const navigate = useNavigate()
 
-  const submit = e => {
+  const submit = async e => {
     e.preventDefault()
+    setError('')
     try{
+      // Register in localStorage for auth
       const user = register({ name, email, password, role, phone, experience, company })
+      
+      // If candidate, also save to backend database
+      if (role === 'candidate') {
+        try {
+          const form = new FormData()
+          form.append('name', name)
+          form.append('email', email)
+          form.append('phone', phone || '')
+          form.append('experience', experience || '')
+          form.append('company', company || '')
+          
+          const response = await fetch('http://localhost:8000/api/register-candidate', {
+            method: 'POST',
+            body: form
+          })
+          
+          if (response.ok) {
+            const result = await response.json()
+            console.log('Candidate saved to database:', result)
+          } else {
+            const errorText = await response.text()
+            console.error('Failed to save candidate to database:', errorText)
+            setError('Registration saved locally but database save failed')
+          }
+        } catch (err) {
+          console.error('Error saving candidate to database:', err)
+          setError('Registration saved locally but database connection failed')
+        }
+      }
+      
       if (user.role === 'recruiter') navigate('/recruiter')
       else navigate('/candidate')
       window.location.reload()
-    }catch(err){ setError(err.message) }
+    }catch(err){ 
+      setError(err.message) 
+    }
   }
 
   return (
